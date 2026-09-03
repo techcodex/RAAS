@@ -1,0 +1,107 @@
+name: raas
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: raas
+      POSTGRES_USER: raas
+      POSTGRES_PASSWORD: raas
+    ports: ['5432:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U raas']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ['6379:6379']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports: ['6333:6333', '6334:6334']
+    volumes: ['qdrantdata:/qdrant/storage']
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: raas
+      MINIO_ROOT_PASSWORD: raassecret
+    ports: ['9000:9000', '9001:9001']
+    volumes: ['miniodata:/data']
+
+  # Creates the documents bucket on startup, then exits.
+  minio-setup:
+    image: minio/mc:latest
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 raas raassecret; do sleep 1; done;
+      mc mb --ignore-existing local/raas-documents;
+      mc anonymous set download local/raas-documents;
+      "
+
+  backend:
+    build: ./backend
+    # `php -S` (not `artisan serve`) so container env vars aren't shadowed by .env.
+    command: php -S 0.0.0.0:8000 -t public public/index.php
+    env_file: ./backend/.env
+    environment: &backend-env
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: raas
+      DB_USERNAME: raas
+      DB_PASSWORD: raas
+      REDIS_HOST: redis
+      RAG_SERVICE_URL: http://rag-service:8001
+    ports: ['8000:8000']
+    volumes: ['./backend:/var/www/html']
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  queue:
+    build: ./backend
+    command: php artisan queue:work --tries=3 --timeout=120
+    env_file: ./backend/.env
+    environment: *backend-env
+    volumes: ['./backend:/var/www/html']
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  rag-service:
+    build:
+      context: ./rag-service
+      args: { INSTALL_DEV: 'true' }
+    env_file: ./rag-service/.env
+    environment:
+      RAG_QDRANT_URL: http://qdrant:6333
+    ports: ['8001:8001']
+    volumes: ['./rag-service:/app', 'ragmodels:/app/models']
+    depends_on: [qdrant]
+
+  frontend:
+    build: ./frontend
+    command: npm run dev -- --host
+    environment:
+      VITE_API_PROXY: http://backend:8000
+    # Host 5174 -> container 5173 (5173 is often taken by another local project).
+    ports: ['5174:5173']
+    volumes: ['./frontend:/app', '/app/node_modules']
+    depends_on: [backend]
+
+volumes:
+  pgdata:
+  qdrantdata:
+  miniodata:
+  ragmodels:

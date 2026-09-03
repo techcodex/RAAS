@@ -1,0 +1,32 @@
+# Roll-ups; each sub-project also has its own .gitignore.
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Local AI-assistant tooling — not part of the project.
+CLAUDE.md
+**/CLAUDE.md
+**/AGENTS.md
+.claude/
+**/.claude/
+.mcp.json
+
+backend/vendor/
+backend/node_modules/
+backend/.env
+backend/storage/*.key
+backend/database/*.sqlite
+backend/raas
+backend/*.sqlite
+
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/test-results/
+frontend/playwright-report/
+
+rag-service/.venv/
+rag-service/.env
+rag-service/__pycache__/
+rag-service/**/__pycache__/

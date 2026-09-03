@@ -1,0 +1,8 @@
+{
+  "include": ["rag-service/app", "rag-service/tests"],
+  "extraPaths": ["rag-service"],
+  "venvPath": "rag-service",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "standard"
+}
