@@ -2,6 +2,7 @@
 import { nextTick, ref, watch } from 'vue'
 
 import { api, errorMessage } from '@/lib/api'
+import { renderMarkdown } from '@/lib/markdown'
 import type { ChatMessage } from '@/lib/types'
 
 const props = defineProps<{ projectId: number | string; enabled: boolean }>()
@@ -71,7 +72,7 @@ watch(() => props.projectId, newChat)
     </div>
 
     <p v-if="!enabled" class="p-4 text-sm text-gray-500">
-      Add an Anthropic API key above, and process at least one document, to start asking questions.
+      Add an LLM API key above, and process at least one document, to start asking questions.
     </p>
 
     <template v-else>
@@ -86,7 +87,12 @@ watch(() => props.projectId, newChat)
               ? 'bg-indigo-600 text-white'
               : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100'"
           >
-            <p class="whitespace-pre-wrap">{{ m.content }}</p>
+            <p v-if="m.role === 'user'" class="whitespace-pre-wrap">{{ m.content }}</p>
+            <div
+              v-else
+              class="prose prose-sm dark:prose-invert max-w-none [&>:first-child]:mt-0 [&>:last-child]:mb-0"
+              v-html="renderMarkdown(m.content)"
+            />
           </div>
           <div v-if="m.citations.length" class="mt-1 space-y-1">
             <details v-for="(c, i) in m.citations" :key="i" class="text-xs text-gray-500">
