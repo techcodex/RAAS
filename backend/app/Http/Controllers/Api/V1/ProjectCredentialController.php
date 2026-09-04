@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreCredentialRequest;
 use App\Http\Resources\Api\V1\ProjectCredentialResource;
 use App\Models\Project;
+use App\Support\LlmProviders;
 use Illuminate\Http\Response;
 
 class ProjectCredentialController extends Controller
@@ -19,10 +20,12 @@ class ProjectCredentialController extends Controller
 
     public function store(StoreCredentialRequest $request, Project $project): ProjectCredentialResource
     {
+        $provider = $request->string('provider')->toString();
+
         $credential = $project->credential()->updateOrCreate([], [
-            'provider' => 'anthropic',
+            'provider' => $provider,
             'api_key' => $request->string('api_key'),
-            'model' => $request->input('model', 'claude-opus-5'),
+            'model' => $request->input('model') ?? LlmProviders::defaultModelFor($provider),
         ]);
 
         return new ProjectCredentialResource($credential);

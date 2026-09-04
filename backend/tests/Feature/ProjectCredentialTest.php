@@ -12,12 +12,13 @@ it('reports no credential configured yet', function () {
     $this->getJson("/api/v1/projects/{$project->id}/credentials")->assertNoContent();
 });
 
-it('stores an api key without ever returning it', function () {
+it('stores an anthropic key without ever returning it', function () {
     $user = createOwner();
     $project = Project::factory()->for($user->currentOrganization)->create();
     Sanctum::actingAs($user);
 
     $response = $this->postJson("/api/v1/projects/{$project->id}/credentials", [
+        'provider' => 'anthropic',
         'api_key' => 'sk-ant-abcdefghijklmnop',
         'model' => 'claude-sonnet-5',
     ]);
@@ -35,34 +36,66 @@ it('stores an api key without ever returning it', function () {
     expect($stored->getRawOriginal('api_key'))->not->toContain('sk-ant-abcdefghijklmnop'); // encrypted at rest
 });
 
+it('stores a gemini key and defaults its model', function () {
+    $user = createOwner();
+    $project = Project::factory()->for($user->currentOrganization)->create();
+    Sanctum::actingAs($user);
+
+    $this->postJson("/api/v1/projects/{$project->id}/credentials", [
+        'provider' => 'gemini',
+        'api_key' => 'AIzaSyFAKE1234567890',
+    ])->assertCreated()
+        ->assertJsonPath('data.provider', 'gemini')
+        ->assertJsonPath('data.model', 'gemini-3.8-flash');
+});
+
 it('replaces an existing key rather than creating a second row', function () {
     $user = createOwner();
     $project = Project::factory()->for($user->currentOrganization)->create();
     Sanctum::actingAs($user);
 
-    $this->postJson("/api/v1/projects/{$project->id}/credentials", ['api_key' => 'sk-ant-first-key-value'])->assertCreated();
-    $this->postJson("/api/v1/projects/{$project->id}/credentials", ['api_key' => 'sk-ant-second-key-value'])->assertOk();
+    $this->postJson("/api/v1/projects/{$project->id}/credentials", ['provider' => 'anthropic', 'api_key' => 'sk-ant-first-key-value'])->assertCreated();
+    $this->postJson("/api/v1/projects/{$project->id}/credentials", ['provider' => 'gemini', 'api_key' => 'AIzaSySECONDKEYVALUE'])->assertOk();
 
+    $stored = ProjectCredential::firstOrFail();
     expect(ProjectCredential::count())->toBe(1)
-        ->and(ProjectCredential::firstOrFail()->api_key)->toBe('sk-ant-second-key-value');
+        ->and($stored->provider)->toBe('gemini')
+        ->and($stored->api_key)->toBe('AIzaSySECONDKEYVALUE');
 });
 
 it('rejects a too-short api key', function () {
     Sanctum::actingAs($user = createOwner());
     $project = Project::factory()->for($user->currentOrganization)->create();
 
-    $this->postJson("/api/v1/projects/{$project->id}/credentials", ['api_key' => 'short'])
+    $this->postJson("/api/v1/projects/{$project->id}/credentials", ['provider' => 'anthropic', 'api_key' => 'short'])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('api_key');
 });
 
-it('rejects an unsupported model', function () {
+it('requires a provider', function () {
+    Sanctum::actingAs($user = createOwner());
+    $project = Project::factory()->for($user->currentOrganization)->create();
+
+    $this->postJson("/api/v1/projects/{$project->id}/credentials", ['api_key' => 'sk-ant-abcdefghijklmnop'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('provider');
+});
+
+it('rejects an unsupported provider', function () {
     Sanctum::actingAs($user = createOwner());
     $project = Project::factory()->for($user->currentOrganization)->create();
 
     $this->postJson("/api/v1/projects/{$project->id}/credentials", [
-        'api_key' => 'sk-ant-abcdefghijklmnop',
-        'model' => 'gpt-5',
+        'provider' => 'openai', 'api_key' => 'sk-abcdefghijklmnop',
+    ])->assertUnprocessable()->assertJsonValidationErrors('provider');
+});
+
+it('rejects a model that does not belong to the chosen provider', function () {
+    Sanctum::actingAs($user = createOwner());
+    $project = Project::factory()->for($user->currentOrganization)->create();
+
+    $this->postJson("/api/v1/projects/{$project->id}/credentials", [
+        'provider' => 'anthropic', 'api_key' => 'sk-ant-abcdefghijklmnop', 'model' => 'gemini-3.8-flash',
     ])->assertUnprocessable()->assertJsonValidationErrors('model');
 });
 
@@ -82,6 +115,6 @@ it('does not expose or let another organization manage a project credential', fu
     Sanctum::actingAs(createOwner());
 
     $this->getJson("/api/v1/projects/{$foreign->id}/credentials")->assertNotFound();
-    $this->postJson("/api/v1/projects/{$foreign->id}/credentials", ['api_key' => 'sk-ant-abcdefghijklmnop'])->assertNotFound();
+    $this->postJson("/api/v1/projects/{$foreign->id}/credentials", ['provider' => 'anthropic', 'api_key' => 'sk-ant-abcdefghijklmnop'])->assertNotFound();
     $this->deleteJson("/api/v1/projects/{$foreign->id}/credentials")->assertNotFound();
 });

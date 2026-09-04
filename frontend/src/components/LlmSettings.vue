@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import { api, errorMessage, validationErrors } from '@/lib/api'
 import type { ProjectCredentialInfo } from '@/lib/types'
@@ -13,13 +13,44 @@ const saving = ref(false)
 const error = ref('')
 const errors = ref<Record<string, string[]>>({})
 
-const form = reactive({ api_key: '', model: 'claude-opus-5' })
+const form = reactive({ provider: 'anthropic', api_key: '', model: '' })
 
-const MODELS = [
-  { id: 'claude-opus-5', label: 'Claude Opus 5 (most capable)' },
-  { id: 'claude-sonnet-5', label: 'Claude Sonnet 5 (balanced)' },
-  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (fastest/cheapest)' },
+// Mirrors backend App\Support\LlmProviders. Anthropic needs a paid API key;
+// Gemini has a no-credit-card free tier (Flash models only).
+const PROVIDERS = [
+  {
+    id: 'anthropic',
+    label: 'Anthropic (Claude)',
+    keyPlaceholder: 'sk-ant-…',
+    keyHelp: 'Requires billing set up at console.anthropic.com.',
+    models: [
+      { id: 'claude-opus-5', label: 'Claude Opus 5 (most capable)' },
+      { id: 'claude-sonnet-5', label: 'Claude Sonnet 5 (balanced)' },
+      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (fastest/cheapest)' },
+    ],
+  },
+  {
+    id: 'gemini',
+    label: 'Google Gemini',
+    keyPlaceholder: 'AIza…',
+    keyHelp: 'Free, no credit card — get a key at aistudio.google.com/apikey.',
+    models: [
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+      { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash' },
+      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+    ],
+  },
 ]
+
+const selectedProvider = computed(() => PROVIDERS.find((p) => p.id === form.provider) ?? PROVIDERS[0])
+
+watch(
+  () => form.provider,
+  () => {
+    form.model = selectedProvider.value.models[0].id
+  },
+  { immediate: true },
+)
 
 async function load() {
   loading.value = true
@@ -70,40 +101,52 @@ onMounted(load)
     <div v-else-if="credential" class="flex items-center justify-between text-sm">
       <span>
         <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">Configured</span>
-        <span class="ml-2 text-gray-500">{{ credential.model }}</span>
+        <span class="ml-2 text-gray-500">{{ credential.provider }} · {{ credential.model }}</span>
       </span>
       <button class="text-xs text-red-600 hover:underline" @click="remove">Remove key</button>
     </div>
 
-    <form v-else class="flex flex-wrap items-end gap-2" @submit.prevent="save">
-      <label class="block text-xs">
-        <span class="text-gray-600 dark:text-gray-400">Anthropic API key</span>
-        <input
-          v-model="form.api_key"
-          type="password"
-          placeholder="sk-ant-…"
-          required
-          class="mt-1 w-64 rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800"
-        />
-        <span v-if="errors.api_key" class="block text-red-600">{{ errors.api_key[0] }}</span>
-      </label>
-      <label class="block text-xs">
-        <span class="text-gray-600 dark:text-gray-400">Model</span>
-        <select
-          v-model="form.model"
-          class="mt-1 rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800"
+    <form v-else class="space-y-2" @submit.prevent="save">
+      <div class="flex flex-wrap items-end gap-2">
+        <label class="block text-xs">
+          <span class="text-gray-600 dark:text-gray-400">Provider</span>
+          <select
+            v-model="form.provider"
+            class="mt-1 rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800"
+          >
+            <option v-for="p in PROVIDERS" :key="p.id" :value="p.id">{{ p.label }}</option>
+          </select>
+        </label>
+        <label class="block text-xs">
+          <span class="text-gray-600 dark:text-gray-400">API key</span>
+          <input
+            v-model="form.api_key"
+            type="password"
+            :placeholder="selectedProvider.keyPlaceholder"
+            required
+            class="mt-1 w-64 rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800"
+          />
+          <span v-if="errors.api_key" class="block text-red-600">{{ errors.api_key[0] }}</span>
+        </label>
+        <label class="block text-xs">
+          <span class="text-gray-600 dark:text-gray-400">Model</span>
+          <select
+            v-model="form.model"
+            class="mt-1 rounded-md border border-gray-300 px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800"
+          >
+            <option v-for="m in selectedProvider.models" :key="m.id" :value="m.id">{{ m.label }}</option>
+          </select>
+        </label>
+        <button
+          type="submit"
+          :disabled="saving"
+          class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
         >
-          <option v-for="m in MODELS" :key="m.id" :value="m.id">{{ m.label }}</option>
-        </select>
-      </label>
-      <button
-        type="submit"
-        :disabled="saving"
-        class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-      >
-        {{ saving ? 'Saving…' : 'Save key' }}
-      </button>
-      <span v-if="error" class="text-xs text-red-600">{{ error }}</span>
+          {{ saving ? 'Saving…' : 'Save key' }}
+        </button>
+      </div>
+      <p class="text-xs text-gray-400">{{ selectedProvider.keyHelp }}</p>
+      <span v-if="error" class="block text-xs text-red-600">{{ error }}</span>
     </form>
   </div>
 </template>

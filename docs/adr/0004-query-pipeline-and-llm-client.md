@@ -31,11 +31,24 @@ LlmClient` (interface) → `AnthropicClient` (official `anthropic-ai/sdk` PHP pa
 - The rag-service's job is text/vector work (extraction, chunking, embeddings, search) — it
   has no other reason to depend on an LLM SDK or hold conversation state.
 
-**Provider scope:** Anthropic only for Phase 3, via `LlmClient` as an interface so another
-provider (OpenAI, etc.) is a new class, not a rewrite. Default model `claude-opus-5`; the
-customer's per-project settings can select `claude-sonnet-5` / `claude-haiku-4-5` instead —
-that's a product choice made by the project owner for their own use case, not a default
+**Provider scope:** Anthropic only for the initial Phase 3 build, via `LlmClient` as an
+interface so another provider is a new class, not a rewrite. Default model `claude-opus-5`;
+the customer's per-project settings can select `claude-sonnet-5` / `claude-haiku-4-5` instead
+— that's a product choice made by the project owner for their own use case, not a default
 downgrade for cost.
+
+**Update (same day):** added **Google Gemini** as a second provider. Anthropic requires
+billing to be set up before a key can even be minted, which blocks anyone (including this
+project's own developer) from testing the feature without payment. Gemini's free tier issues
+keys with no credit card at aistudio.google.com/apikey, so it's the practical way to exercise
+the pipeline end-to-end at zero cost. `App\Support\LlmProviders` now holds the
+provider→model list (mirrored in `LlmSettings.vue`), and `LlmClientResolver` maps a
+credential's `provider` string to its `LlmClient`. Gemini's free tier is Flash-class models
+only (Pro moved to paid-only in April 2026), so `LlmProviders::MODELS['gemini']` deliberately
+lists only Flash models — offering Pro in the dropdown would just produce a confusing
+runtime failure for a free-tier key. `GeminiClient` calls the raw REST API (`x-goog-api-key`
+header, `models/{model}:generateContent`) since there is no official Google PHP SDK for
+Gemini; Anthropic's official `anthropic-ai/sdk` is used for that provider as before.
 
 **Response shape:** plain JSON (`{data: message, conversation_id}`), not SSE streaming. A
 grounded RAG answer is a single bounded completion, not a long agentic run — synchronous is

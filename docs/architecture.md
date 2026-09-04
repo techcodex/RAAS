@@ -35,9 +35,12 @@ question-answering app to their employees. Processing is asynchronous; the UI ne
 - Queue jobs (Redis) for document processing; job status is mirrored on the `documents` row.
 - Owns LLM provider credentials (`project_credentials`, `encrypted` cast, never serialized)
   and `RagPipeline` — the retrieval+generation service. `RagPipeline` calls rag-service
-  `/search` for the grounding context, then calls the LLM directly (`App\Services\Llm`,
-  interface + `AnthropicClient` on the official `anthropic-ai/sdk` — Anthropic only for now,
-  more providers plug into the same interface). Conversations/messages persist per project.
+  `/search` for the grounding context, then calls the LLM directly through `App\Services\Llm`:
+  an `LlmClient` interface, an `LlmClientResolver` that maps a credential's `provider` string
+  to an implementation, and `App\Support\LlmProviders` as the single source of truth for which
+  providers/models are offered. Two providers today — `anthropic` (official `anthropic-ai/sdk`)
+  and `gemini` (raw REST; no official Google PHP SDK) — more plug into the same interface.
+  Conversations/messages persist per project.
 
 ### rag-service (Python FastAPI)
 - Stateless worker. Pulls the original file from S3, extracts text, chunks it with a

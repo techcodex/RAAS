@@ -7,7 +7,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Project;
 use App\Models\ProjectCredential;
-use App\Services\Llm\LlmClient;
+use App\Services\Llm\LlmClientResolver;
 use Illuminate\Support\Str;
 
 /**
@@ -20,7 +20,7 @@ class RagPipeline
 
     public function __construct(
         private readonly RagClient $rag,
-        private readonly LlmClient $llm,
+        private readonly LlmClientResolver $llmResolver,
     ) {}
 
     public function ask(
@@ -51,7 +51,7 @@ class RagPipeline
 
         $conversation->messages()->create(['role' => 'user', 'content' => $question]);
 
-        $answer = $this->llm->complete(
+        $answer = $this->llmResolver->for($credential->provider)->complete(
             apiKey: $credential->api_key,
             model: $credential->model,
             system: $this->systemPrompt($matches),

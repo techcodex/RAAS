@@ -7,6 +7,7 @@ use App\Models\ProjectCredential;
 use App\Models\User;
 use App\Services\Llm\LlmAnswer;
 use App\Services\Llm\LlmClient;
+use App\Services\Llm\LlmClientResolver;
 use App\Services\RagClient;
 use App\Services\RagPipeline;
 use App\Support\TenantContext;
@@ -20,6 +21,18 @@ use App\Support\TenantContext;
 function bindTenant(User $owner): void
 {
     app(TenantContext::class)->set($owner->currentOrganization);
+}
+
+/**
+ * Stub the provider resolver to hand back a given LlmClient double, regardless
+ * of which provider the credential asks for — the pipeline tests aren't about
+ * provider selection (that's LlmClientResolverTest).
+ */
+function fakeLlmClient(LlmClient $client): void
+{
+    $resolver = Mockery::mock(LlmClientResolver::class);
+    $resolver->shouldReceive('for')->andReturn($client);
+    app()->instance(LlmClientResolver::class, $resolver);
 }
 
 function fakeSearchResult(array $overrides = []): array
@@ -53,7 +66,7 @@ it('searches, calls the llm with grounded context, and persists both turns', fun
         'embedding_model_id' => 'BAAI/bge-small-en-v1.5',
         'embedding_dimension' => 384,
     ]);
-    $credential = ProjectCredential::factory()->for($project)->create(['model' => 'claude-opus-5']);
+    $credential = ProjectCredential::factory()->for($project)->create(['provider' => 'anthropic', 'model' => 'claude-opus-5']);
 
     $this->mock(RagClient::class)
         ->shouldReceive('search')
@@ -61,8 +74,8 @@ it('searches, calls the llm with grounded context, and persists both turns', fun
         ->with($project->vectorCollection(), 'What is the travel policy?', 6, $project->embedderConfig())
         ->andReturn(fakeSearchResult());
 
-    $this->mock(LlmClient::class)
-        ->shouldReceive('complete')
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('complete')
         ->once()
         ->withArgs(function (string $apiKey, string $model, string $system, array $messages) use ($credential) {
             return $apiKey === $credential->api_key
@@ -72,6 +85,9 @@ it('searches, calls the llm with grounded context, and persists both turns', fun
                 && end($messages) === ['role' => 'user', 'content' => 'What is the travel policy?'];
         })
         ->andReturn(new LlmAnswer('Book at least 14 days ahead [1].', 'claude-opus-5', 'end_turn', 120, 12));
+    $resolver = Mockery::mock(LlmClientResolver::class);
+    $resolver->shouldReceive('for')->once()->with('anthropic')->andReturn($llmClient);
+    app()->instance(LlmClientResolver::class, $resolver);
 
     $message = app(RagPipeline::class)->ask($project, $credential, 'What is the travel policy?', null);
 
@@ -100,14 +116,15 @@ it('continues an existing conversation with prior turns as history', function ()
 
     $this->mock(RagClient::class)->shouldReceive('search')->andReturn(fakeSearchResult());
 
-    $this->mock(LlmClient::class)
-        ->shouldReceive('complete')
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('complete')
         ->withArgs(fn (string $k, string $m, string $s, array $messages) => $messages === [
             ['role' => 'user', 'content' => 'First question'],
             ['role' => 'assistant', 'content' => 'First answer'],
             ['role' => 'user', 'content' => 'Second question'],
         ])
         ->andReturn(new LlmAnswer('Second answer', 'claude-opus-5', 'end_turn', 10, 5));
+    fakeLlmClient($llmClient);
 
     app(RagPipeline::class)->ask($project, $credential, 'Second question', $conversation);
 
@@ -122,10 +139,11 @@ it('answers "no information" when nothing relevant is found, without inventing a
 
     $this->mock(RagClient::class)->shouldReceive('search')->andReturn(['results' => [], 'model_id' => 'm', 'dimension' => 384]);
 
-    $this->mock(LlmClient::class)
-        ->shouldReceive('complete')
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('complete')
         ->withArgs(fn (string $k, string $m, string $system) => str_contains($system, "don't have information"))
         ->andReturn(new LlmAnswer("I don't have information on that in the uploaded documents.", 'claude-opus-5', 'end_turn', 40, 15));
+    fakeLlmClient($llmClient);
 
     $message = app(RagPipeline::class)->ask($project, $credential, 'Unrelated question', null);
 
@@ -139,8 +157,33 @@ it('surfaces a bad api key as a RagException', function () {
     $credential = ProjectCredential::factory()->for($project)->create();
 
     $this->mock(RagClient::class)->shouldReceive('search')->andReturn(fakeSearchResult());
-    $this->mock(LlmClient::class)->shouldReceive('complete')->andThrow(new RagException('The Anthropic API key on this project is invalid or has been revoked.'));
+
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('complete')->andThrow(new RagException('The Anthropic API key on this project is invalid or has been revoked.'));
+    fakeLlmClient($llmClient);
 
     expect(fn () => app(RagPipeline::class)->ask($project, $credential, 'Q', null))
         ->toThrow(RagException::class, 'invalid or has been revoked');
+});
+
+it('resolves the llm client for the credential provider, gemini included', function () {
+    $owner = createOwner();
+    bindTenant($owner);
+    $project = Project::factory()->for($owner->currentOrganization)->create(['embedding_model_id' => 'm', 'embedding_dimension' => 384]);
+    $credential = ProjectCredential::factory()->for($project)->create(['provider' => 'gemini', 'model' => 'gemini-3.8-flash']);
+
+    $this->mock(RagClient::class)->shouldReceive('search')->andReturn(fakeSearchResult());
+
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('complete')
+        ->withArgs(fn (string $k, string $model) => $model === 'gemini-3.8-flash')
+        ->andReturn(new LlmAnswer('Answer.', 'gemini-3.8-flash', 'STOP', 20, 8));
+
+    $resolver = Mockery::mock(LlmClientResolver::class);
+    $resolver->shouldReceive('for')->once()->with('gemini')->andReturn($llmClient);
+    app()->instance(LlmClientResolver::class, $resolver);
+
+    $message = app(RagPipeline::class)->ask($project, $credential, 'Q', null);
+
+    expect($message->usage['model'])->toBe('gemini-3.8-flash');
 });
