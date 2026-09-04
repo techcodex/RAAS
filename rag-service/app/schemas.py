@@ -55,3 +55,26 @@ class ExportRequest(BaseModel):
 class PurgeDocumentRequest(BaseModel):
     collection: str
     document_id: int
+
+
+class SearchRequest(BaseModel):
+    collection: str
+    query: str
+    top_k: int = 6
+    embedder: EmbedderConfig | None = None
+    filter: dict[str, int | str] | None = None
+
+
+class SearchResultOut(BaseModel):
+    id: str
+    score: float
+    document_id: int
+    chunk_index: int
+    text: str
+    metadata: dict = Field(default_factory=dict)
+
+
+class SearchResponse(BaseModel):
+    results: list[SearchResultOut]
+    model_id: str
+    dimension: int

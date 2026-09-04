@@ -89,6 +89,24 @@ class QdrantStore:
             wait=True,
         )
 
+    def search(self, vector: list[float], limit: int, flt: dict | None = None):
+        """Nearest-neighbour search, optionally filtered on exact payload matches."""
+        from qdrant_client import models
+
+        query_filter = None
+        if flt:
+            query_filter = models.Filter(
+                must=[models.FieldCondition(key=k, match=models.MatchValue(value=v)) for k, v in flt.items()]
+            )
+
+        return self.client.query_points(
+            collection_name=self.collection,
+            query=vector,
+            query_filter=query_filter,
+            limit=limit,
+            with_payload=True,
+        ).points
+
     def count(self) -> int:
         return self.client.count(self.collection, exact=True).count
 

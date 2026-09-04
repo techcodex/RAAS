@@ -9,30 +9,35 @@ question-answering app to their employees. Processing is asynchronous; the UI ne
                     ┌─────────────┐
    Browser  ───────▶│  frontend   │  Vue 3 SPA (admin)
                     └──────┬──────┘
-                           │ /api  (Sanctum cookie auth)
+                           │ /api  (Sanctum bearer token)
                     ┌──────▼──────┐        ┌───────────┐
-                    │   backend   │───────▶│ PostgreSQL│  app data, doc/job metadata
+                    │   backend   │───────▶│ PostgreSQL│  app data, doc/job metadata, conversations
                     │  Laravel API│        └───────────┘
                     │             │        ┌───────────┐
-                    │             │───────▶│   Redis   │  queue + cache
+                    │  RagPipeline│───────▶│   Redis   │  queue + cache
                     └──┬───────┬──┘        └───────────┘
         queued job     │       │  S3 (MinIO) — original uploaded files
-                       │       └────────────────────────┐
-                ┌──────▼───────┐                  ┌──────▼──────┐
-                │ rag-service  │─────────────────▶│   Qdrant    │  vectors (one collection/project)
-                │ FastAPI/Py   │  upsert          └─────────────┘
-                └──────────────┘
-                  parse · chunk · embed · (Phase 3) embed-query · rerank
+                       │       └───────────────┬────────────────┐
+                ┌──────▼───────┐        ┌──────▼──────┐   ┌─────▼─────┐
+                │ rag-service  │───────▶│   Qdrant    │   │ Anthropic │  bring-your-own key
+                │ FastAPI/Py   │ upsert/│ (1 coll./   │   │  Messages │  (RagPipeline calls
+                │              │ search │  project)   │   │    API    │   this directly)
+                └──────────────┘        └─────────────┘   └───────────┘
+                  parse · chunk · embed · search (embed query + Qdrant)
 ```
 
 ## Components
 
 ### backend (Laravel)
 - REST API under `/api`, versioned from Phase 1 (`/api/v1`).
-- Sanctum SPA cookie auth. Multi-tenant: every domain row carries `organization_id`,
+- Sanctum **bearer-token** auth. Multi-tenant: every domain row carries `organization_id`,
   enforced by a global scope + tenant-resolution middleware.
 - Queue jobs (Redis) for document processing; job status is mirrored on the `documents` row.
-- Owns LLM provider credentials (encrypted at rest) and the `RagPipeline` service (Phase 3).
+- Owns LLM provider credentials (`project_credentials`, `encrypted` cast, never serialized)
+  and `RagPipeline` — the retrieval+generation service. `RagPipeline` calls rag-service
+  `/search` for the grounding context, then calls the LLM directly (`App\Services\Llm`,
+  interface + `AnthropicClient` on the official `anthropic-ai/sdk` — Anthropic only for now,
+  more providers plug into the same interface). Conversations/messages persist per project.
 
 ### rag-service (Python FastAPI)
 - Stateless worker. Pulls the original file from S3, extracts text, chunks it with a
@@ -41,9 +46,9 @@ question-answering app to their employees. Processing is asynchronous; the UI ne
 - Default embedder: local `fastembed` ONNX (`BAAI/bge-small-en-v1.5`, 384d). OpenAI/Cohere/
   Voyage added in Phase 4, selectable per project.
 - Internal calls authenticated with an HMAC signature over `"{timestamp}." + rawBody`
-  (`RAG_INTERNAL_SECRET`), 5-minute skew window. Endpoints: `/process`, `/embed-query`,
-  `/rerank` (Phase 3), `/export`, `/documents/purge`, `/collections/drop`; `/health` and
-  `/strategies` are open.
+  (`RAG_INTERNAL_SECRET`), 5-minute skew window. Endpoints: `/process`, `/search`
+  (embeds the query + Qdrant nearest-neighbour, used by `RagPipeline`), `/embed-query`,
+  `/export`, `/documents/purge`, `/collections/drop`; `/health` and `/strategies` are open.
 - Chunking is a strategy pattern (`chunking/`): `fixed`, `recursive`, `sentence`, `markdown`,
   `semantic`, plus `auto`. See ADR 0002.
 

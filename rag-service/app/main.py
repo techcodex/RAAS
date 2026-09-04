@@ -15,6 +15,9 @@ from app.schemas import (
     ProcessRequest,
     ProcessResponse,
     PurgeDocumentRequest,
+    SearchRequest,
+    SearchResponse,
+    SearchResultOut,
 )
 from app.security import verify_signature
 from app.vectorstore import CollectionMismatch, QdrantStore
@@ -91,6 +94,39 @@ def export(req: ExportRequest) -> StreamingResponse:
 def drop_collection(req: ExportRequest) -> dict[str, str]:
     QdrantStore(req.collection).drop()
     return {"status": "dropped", "collection": req.collection}
+
+
+_CORE_PAYLOAD_KEYS = {"document_id", "organization_id", "project_id", "chunk_index", "text", "model_id"}
+
+
+@app.post("/search", response_model=SearchResponse, dependencies=[Internal])
+def search(req: SearchRequest) -> SearchResponse:
+    store = QdrantStore(req.collection)
+    if not store.client.collection_exists(req.collection):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Collection does not exist.")
+
+    try:
+        embedder = get_embedder(req.embedder)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+    vector = embedder.embed_one(req.query)
+    hits = store.search(vector, limit=req.top_k, flt=req.filter)
+
+    results = []
+    for hit in hits:
+        payload = hit.payload or {}
+        results.append(
+            SearchResultOut(
+                id=str(hit.id),
+                score=hit.score,
+                document_id=payload["document_id"],
+                chunk_index=payload["chunk_index"],
+                text=payload["text"],
+                metadata={k: v for k, v in payload.items() if k not in _CORE_PAYLOAD_KEYS},
+            )
+        )
+    return SearchResponse(results=results, model_id=embedder.model_id, dimension=embedder.dimension)
 
 
 @app.post("/documents/purge", dependencies=[Internal])

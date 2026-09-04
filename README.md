@@ -16,14 +16,14 @@ publish a query app to your employees.
 
 ## Build phases
 
-0. **Scaffold & tooling** ← current
-1. Document upload (frontend + backend)
-2. Chunking & embeddings (rag-service) + Qdrant + export
-3. Bring-your-own-LLM in-app querying
-4. Advanced retrieval, ops, multi-embedder
+0. Scaffold & tooling — done
+1. Document upload (frontend + backend) — done
+2. Chunking & embeddings (rag-service) + Qdrant + export — done
+3. Bring-your-own-LLM in-app querying — done
+4. Advanced retrieval, ops, multi-embedder — **current**
 5. Employee query app
 
-Full plan: `~/.claude/plans/we-are-going-to-smooth-brook.md`. See `docs/architecture.md`.
+See `docs/architecture.md` and `docs/adr/` for the design decisions behind each phase.
 
 ## Quick start (Docker)
 
@@ -61,9 +61,5 @@ cd rag-service  && .venv/bin/ruff check . && .venv/bin/pytest
 
 > Playwright browsers: first run `cd frontend && npx playwright install chromium`.
 
-## Claude Code plugins used
-
-- `qdrant-skills`, `playwright`, `pyright-lsp`, `php-lsp` — user scope.
-- Laravel Boost — runs as a project MCP server (`.mcp.json`, targets `backend/`); the
-  marketplace plugin is disabled since it can't point at a monorepo subdirectory.
-- LSP binaries: `npm i -g pyright intelephense`.
+`scripts/smoke.py` runs a stdlib-only end-to-end check (auth, tenancy, upload, every chunking
+strategy, export, delete/purge) against a running stack — no dependencies beyond Python 3.

@@ -103,3 +103,44 @@ export interface Paginated<T> {
   data: T[]
   meta: { current_page: number; last_page: number; per_page: number; total: number }
 }
+
+export interface ProjectCredentialInfo {
+  provider: string
+  model: string
+  configured: true
+  created_at: string
+  updated_at: string
+}
+
+export interface Citation {
+  document_id: number
+  chunk_index: number
+  score: number
+  excerpt: string
+}
+
+export interface LlmUsage {
+  model: string
+  stop_reason: string | null
+  input_tokens: number
+  output_tokens: number
+}
+
+export interface ChatMessage {
+  id: number
+  conversation_id: number
+  role: 'user' | 'assistant'
+  content: string
+  citations: Citation[]
+  usage: LlmUsage | null
+  created_at: string
+}
+
+export interface Conversation {
+  id: number
+  project_id: number
+  title: string | null
+  messages?: ChatMessage[]
+  created_at: string
+  updated_at: string
+}

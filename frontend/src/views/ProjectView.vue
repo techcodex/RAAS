@@ -6,6 +6,8 @@ import AppShell from '@/components/AppShell.vue'
 import ChunkPreview from '@/components/ChunkPreview.vue'
 import DocumentTable from '@/components/DocumentTable.vue'
 import DocumentUploader from '@/components/DocumentUploader.vue'
+import LlmSettings from '@/components/LlmSettings.vue'
+import QueryChat from '@/components/QueryChat.vue'
 import StrategyPicker from '@/components/StrategyPicker.vue'
 import { api, errorMessage } from '@/lib/api'
 import type { DocumentFile, Project } from '@/lib/types'
@@ -18,12 +20,15 @@ const error = ref('')
 const actionError = ref('')
 const exporting = ref(false)
 const previewed = ref<DocumentFile | null>(null)
+const tab = ref<'documents' | 'ask'>('documents')
+const hasCredential = ref(false)
 
 const strategy = ref('auto')
 const strategyConfig = ref<Record<string, unknown>>({})
 
 const table = useTemplateRef<InstanceType<typeof DocumentTable>>('table')
 const canExport = computed(() => project.value?.embedder.bound_model_id != null)
+const canAsk = computed(() => hasCredential.value && canExport.value)
 
 async function load(showSpinner = true) {
   if (showSpinner) loading.value = true
@@ -109,36 +114,64 @@ onMounted(load)
         </button>
       </div>
 
-      <section class="mt-6">
-        <DocumentUploader :project-id="project.id" @uploaded="onUploaded" />
-      </section>
+      <nav class="mt-6 flex gap-4 border-b border-gray-200 text-sm dark:border-gray-800">
+        <button
+          class="border-b-2 px-1 pb-2"
+          :class="tab === 'documents' ? 'border-indigo-600 font-medium text-indigo-600' : 'border-transparent text-gray-500'"
+          @click="tab = 'documents'"
+        >
+          Documents
+        </button>
+        <button
+          class="border-b-2 px-1 pb-2"
+          :class="tab === 'ask' ? 'border-indigo-600 font-medium text-indigo-600' : 'border-transparent text-gray-500'"
+          @click="tab = 'ask'"
+        >
+          Ask
+        </button>
+      </nav>
 
-      <section class="mt-6 space-y-3">
-        <StrategyPicker v-model:strategy="strategy" v-model:config="strategyConfig" />
-        <div class="flex items-center gap-3">
-          <button
-            class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-            @click="processAll"
-          >
-            Process uploaded documents
-          </button>
-          <span v-if="actionError" class="text-sm text-red-600">{{ actionError }}</span>
-        </div>
-      </section>
+      <template v-if="tab === 'documents'">
+        <section class="mt-6">
+          <DocumentUploader :project-id="project.id" @uploaded="onUploaded" />
+        </section>
 
-      <section class="mt-4">
-        <DocumentTable
-          ref="table"
-          :project-id="project.id"
-          @process="process"
-          @preview="previewed = $event"
-          @settled="load(false)"
-        />
-      </section>
+        <section class="mt-6 space-y-3">
+          <StrategyPicker v-model:strategy="strategy" v-model:config="strategyConfig" />
+          <div class="flex items-center gap-3">
+            <button
+              class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+              @click="processAll"
+            >
+              Process uploaded documents
+            </button>
+            <span v-if="actionError" class="text-sm text-red-600">{{ actionError }}</span>
+          </div>
+        </section>
 
-      <section v-if="previewed" class="mt-4">
-        <ChunkPreview :document="previewed" @close="previewed = null" />
-      </section>
+        <section class="mt-4">
+          <DocumentTable
+            ref="table"
+            :project-id="project.id"
+            @process="process"
+            @preview="previewed = $event"
+            @settled="load(false)"
+          />
+        </section>
+
+        <section v-if="previewed" class="mt-4">
+          <ChunkPreview :document="previewed" @close="previewed = null" />
+        </section>
+      </template>
+
+      <template v-else>
+        <section class="mt-6">
+          <LlmSettings :project-id="project.id" @update:configured="hasCredential = $event" />
+        </section>
+        <section class="mt-4">
+          <QueryChat :project-id="project.id" :enabled="canAsk" />
+        </section>
+      </template>
     </template>
   </AppShell>
 </template>

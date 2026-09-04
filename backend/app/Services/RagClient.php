@@ -59,6 +59,24 @@ class RagClient
     }
 
     /**
+     * Embed the query and return the top matching chunks from a project's collection.
+     *
+     * @param  array{provider: string, model: string|null}|null  $embedder
+     * @param  array<string, mixed>|null  $filter
+     * @return array{results: list<array<string, mixed>>, model_id: string, dimension: int}
+     */
+    public function search(string $collection, string $query, int $topK, ?array $embedder = null, ?array $filter = null): array
+    {
+        return $this->post('/search', [
+            'collection' => $collection,
+            'query' => $query,
+            'top_k' => $topK,
+            'embedder' => $embedder,
+            'filter' => $filter,
+        ], timeout: 60)->json();
+    }
+
+    /**
      * Stream a project's vectors out of Qdrant as NDJSON (manifest line first).
      */
     public function export(string $collection): Response

@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\Llm\AnthropicClient;
+use App\Services\Llm\LlmClient;
 use App\Services\RagClient;
 use App\Support\TenantContext;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -20,6 +22,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(TenantContext::class);
         $this->app->singleton(RagClient::class, fn () => RagClient::fromConfig());
+        $this->app->bind(LlmClient::class, AnthropicClient::class);
     }
 
     /**
