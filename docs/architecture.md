@@ -38,8 +38,9 @@ question-answering app to their employees. Processing is asynchronous; the UI ne
   `/search` for the grounding context, then calls the LLM directly through `App\Services\Llm`:
   an `LlmClient` interface, an `LlmClientResolver` that maps a credential's `provider` string
   to an implementation, and `App\Support\LlmProviders` as the single source of truth for which
-  providers/models are offered. Two providers today — `anthropic` (official `anthropic-ai/sdk`)
-  and `gemini` (raw REST; no official Google PHP SDK) — more plug into the same interface.
+  providers/models are offered. Three providers today — `anthropic` (official
+  `anthropic-ai/sdk`), `gemini` and `groq` (both raw REST; neither has an official PHP SDK) —
+  more plug into the same interface.
   Conversations/messages persist per project.
 
 ### rag-service (Python FastAPI)

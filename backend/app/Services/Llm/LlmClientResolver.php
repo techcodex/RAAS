@@ -17,6 +17,7 @@ class LlmClientResolver
     private const CLIENTS = [
         'anthropic' => AnthropicClient::class,
         'gemini' => GeminiClient::class,
+        'groq' => GroqClient::class,
     ];
 
     public function __construct(private readonly Container $container) {}

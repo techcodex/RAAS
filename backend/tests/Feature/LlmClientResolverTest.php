@@ -3,13 +3,15 @@
 use App\Exceptions\RagException;
 use App\Services\Llm\AnthropicClient;
 use App\Services\Llm\GeminiClient;
+use App\Services\Llm\GroqClient;
 use App\Services\Llm\LlmClientResolver;
 
 it('resolves each supported provider to its client', function () {
     $resolver = app(LlmClientResolver::class);
 
     expect($resolver->for('anthropic'))->toBeInstanceOf(AnthropicClient::class)
-        ->and($resolver->for('gemini'))->toBeInstanceOf(GeminiClient::class);
+        ->and($resolver->for('gemini'))->toBeInstanceOf(GeminiClient::class)
+        ->and($resolver->for('groq'))->toBeInstanceOf(GroqClient::class);
 });
 
 it('rejects an unknown provider', function () {

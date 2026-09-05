@@ -16,6 +16,7 @@ class LlmProviders
         'anthropic' => ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
         // Flash-class only — Gemini's no-credit-card free tier does not include Pro models.
         'gemini' => ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-2.0-flash'],
+        'groq' => ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'],
     ];
 
     /**
@@ -24,6 +25,7 @@ class LlmProviders
     public const DEFAULT_MODEL = [
         'anthropic' => 'claude-opus-5',
         'gemini' => 'gemini-3.8-flash',
+        'groq' => 'llama-3.3-70b-versatile',
     ];
 
     /**

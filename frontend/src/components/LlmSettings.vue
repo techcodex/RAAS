@@ -16,7 +16,7 @@ const errors = ref<Record<string, string[]>>({})
 const form = reactive({ provider: 'anthropic', api_key: '', model: '' })
 
 // Mirrors backend App\Support\LlmProviders. Anthropic needs a paid API key;
-// Gemini has a no-credit-card free tier (Flash models only).
+// Gemini and Groq both have no-credit-card free tiers (Gemini: Flash models only).
 const PROVIDERS = [
   {
     id: 'anthropic',
@@ -38,6 +38,17 @@ const PROVIDERS = [
       { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
       { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash' },
       { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+    ],
+  },
+  {
+    id: 'groq',
+    label: 'Groq',
+    keyPlaceholder: 'gsk_…',
+    keyHelp: 'Free, no credit card, generous limits — get a key at console.groq.com/keys.',
+    models: [
+      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (balanced)' },
+      { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B (fastest)' },
+      { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B' },
     ],
   },
 ]

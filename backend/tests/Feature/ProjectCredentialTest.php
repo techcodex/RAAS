@@ -49,6 +49,19 @@ it('stores a gemini key and defaults its model', function () {
         ->assertJsonPath('data.model', 'gemini-3.8-flash');
 });
 
+it('stores a groq key and defaults its model', function () {
+    $user = createOwner();
+    $project = Project::factory()->for($user->currentOrganization)->create();
+    Sanctum::actingAs($user);
+
+    $this->postJson("/api/v1/projects/{$project->id}/credentials", [
+        'provider' => 'groq',
+        'api_key' => 'gsk_fake1234567890',
+    ])->assertCreated()
+        ->assertJsonPath('data.provider', 'groq')
+        ->assertJsonPath('data.model', 'llama-3.3-70b-versatile');
+});
+
 it('replaces an existing key rather than creating a second row', function () {
     $user = createOwner();
     $project = Project::factory()->for($user->currentOrganization)->create();

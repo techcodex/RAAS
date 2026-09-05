@@ -50,6 +50,17 @@ runtime failure for a free-tier key. `GeminiClient` calls the raw REST API (`x-g
 header, `models/{model}:generateContent`) since there is no official Google PHP SDK for
 Gemini; Anthropic's official `anthropic-ai/sdk` is used for that provider as before.
 
+**Update (2026-09-04, issue [#1](https://github.com/techcodex/RAAS/issues/1)):** added
+**Groq** as a third provider — Gemini's free tier proved too rate-limited for comfortable
+testing (10 req/min, 250/day on Flash) and errors out mid-session. Groq's free tier
+(console.groq.com/keys, no credit card) has much more headroom and is fast (custom inference
+hardware, not CPU-bound like a local model). `GroqClient` calls Groq's OpenAI-compatible REST
+API (`Authorization: Bearer`, `POST /openai/v1/chat/completions`) — no official Groq PHP SDK
+either, so raw `Http` calls like `GeminiClient`. Default model `llama-3.3-70b-versatile`.
+Three providers now share the same `LlmClient` interface with no changes to `RagPipeline`,
+the query endpoint, or the frontend chat UI — only `LlmProviders`, `LlmClientResolver`, and
+`LlmSettings.vue` needed a new entry each, which is the seam this abstraction was built for.
+
 **Response shape:** plain JSON (`{data: message, conversation_id}`), not SSE streaming. A
 grounded RAG answer is a single bounded completion, not a long agentic run — synchronous is
 simpler to build, test, and reason about. Streaming is a follow-up if latency becomes a
