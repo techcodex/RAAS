@@ -14,9 +14,12 @@ const page = computed(() => Math.max(1, Number(route.query.page) || 1))
 const loading = ref(true)
 const loadError = ref('')
 
-const form = reactive<{ name: string; document_limit: string }>({ name: '', document_limit: '' })
+const form = reactive({ name: '', document_limit: '', owner_name: '', owner_email: '' })
 const errors = ref<Record<string, string[]>>({})
 const creating = ref(false)
+
+/** Credentials for the just-created org owner — shown once. */
+const provisioned = ref<{ email: string; password: string } | null>(null)
 
 const editingId = ref<number | null>(null)
 const editValue = ref('')
@@ -49,11 +52,21 @@ async function create() {
   creating.value = true
   errors.value = {}
   try {
-    const payload: Record<string, unknown> = { name: form.name }
+    const payload: Record<string, unknown> = {
+      name: form.name,
+      owner_name: form.owner_name,
+      owner_email: form.owner_email,
+    }
     if (form.document_limit !== '') payload.document_limit = Number(form.document_limit)
-    await api.post('/admin/organizations', payload)
+    const { data } = await api.post<{ temporary_password: string }>(
+      '/admin/organizations',
+      payload,
+    )
+    provisioned.value = { email: form.owner_email, password: data.temporary_password }
     form.name = ''
     form.document_limit = ''
+    form.owner_name = ''
+    form.owner_email = ''
     if (page.value === 1) {
       await load()
     } else {
@@ -126,38 +139,71 @@ async function toggleStatus(org: AdminOrganization) {
     Every organization on this deployment — document limits and access.
   </p>
 
+  <div
+    v-if="provisioned"
+    class="mt-4 rounded-md bg-green-50 p-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-200"
+  >
+    Owner sign-in for <strong>{{ provisioned.email }}</strong> —
+    <code class="rounded bg-white/60 px-1.5 py-0.5 font-mono dark:bg-black/30">{{ provisioned.password }}</code>
+    Send this to them now; the password won't be shown again.
+    <button class="ml-2 text-xs underline" @click="provisioned = null">Dismiss</button>
+  </div>
+
   <form
-    class="mt-4 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-start dark:border-gray-800 dark:bg-gray-900"
+    class="mt-4 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
     @submit.prevent="create"
   >
-    <div class="flex-1">
-      <input
-        v-model="form.name"
-        aria-label="New organization name"
-        placeholder="New organization name"
-        autocomplete="off"
-        required
-        class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
-      />
-      <span v-if="errors.name" class="text-xs text-red-600">{{ errors.name[0] }}</span>
-    </div>
-    <div class="sm:w-48">
-      <input
-        v-model="form.document_limit"
-        type="number"
-        min="0"
-        aria-label="Document limit"
-        placeholder="Doc limit (blank = default)"
-        class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
-      />
-      <span v-if="errors.document_limit" class="text-xs text-red-600">{{ errors.document_limit[0] }}</span>
+    <p class="text-sm font-medium">New organization</p>
+    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+      <label class="block text-sm">
+        <span class="text-gray-700 dark:text-gray-300">Organization name</span>
+        <input
+          v-model="form.name"
+          autocomplete="off"
+          required
+          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+        />
+        <span v-if="errors.name" class="text-xs text-red-600">{{ errors.name[0] }}</span>
+      </label>
+      <label class="block text-sm">
+        <span class="text-gray-700 dark:text-gray-300">Document limit</span>
+        <input
+          v-model="form.document_limit"
+          type="number"
+          min="0"
+          placeholder="Blank = platform default"
+          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+        />
+        <span v-if="errors.document_limit" class="text-xs text-red-600">{{ errors.document_limit[0] }}</span>
+      </label>
+      <label class="block text-sm">
+        <span class="text-gray-700 dark:text-gray-300">Owner name</span>
+        <input
+          v-model="form.owner_name"
+          autocomplete="off"
+          required
+          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+        />
+        <span v-if="errors.owner_name" class="text-xs text-red-600">{{ errors.owner_name[0] }}</span>
+      </label>
+      <label class="block text-sm">
+        <span class="text-gray-700 dark:text-gray-300">Owner email</span>
+        <input
+          v-model="form.owner_email"
+          type="email"
+          autocomplete="off"
+          required
+          class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+        />
+        <span v-if="errors.owner_email" class="text-xs text-red-600">{{ errors.owner_email[0] }}</span>
+      </label>
     </div>
     <button
       type="submit"
       :disabled="creating"
-      class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+      class="mt-3 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
     >
-      {{ creating ? 'Creating…' : 'Create' }}
+      {{ creating ? 'Creating…' : 'Create organization' }}
     </button>
   </form>
 

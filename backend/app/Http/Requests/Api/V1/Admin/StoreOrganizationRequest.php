@@ -19,6 +19,9 @@ class StoreOrganizationRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'document_limit' => ['nullable', 'integer', 'min:0', 'max:1000000'],
+            // The organization's owner account, provisioned on create.
+            'owner_name' => ['required', 'string', 'max:255'],
+            'owner_email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
         ];
     }
 }

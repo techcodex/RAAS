@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Actions\RegisterOrganizationOwner;
 use App\Enums\OrganizationStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Admin\StoreOrganizationRequest;
@@ -10,8 +11,11 @@ use App\Http\Requests\Api\V1\Admin\UpdateOrganizationStatusRequest;
 use App\Http\Resources\Api\V1\Admin\AdminOrganizationResource;
 use App\Models\Organization;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class OrganizationController extends Controller
@@ -27,18 +31,36 @@ class OrganizationController extends Controller
         return AdminOrganizationResource::collection($organizations);
     }
 
-    public function store(StoreOrganizationRequest $request): AdminOrganizationResource
+    /**
+     * Create an organization together with its owner account. The generated
+     * password is returned once, alongside the resource, for the admin to hand
+     * off — it is never retrievable again.
+     */
+    public function store(StoreOrganizationRequest $request, RegisterOrganizationOwner $register): JsonResponse
     {
-        $name = $request->string('name')->toString();
+        $password = Str::password(16);
 
-        $organization = Organization::create([
-            'name' => $name,
-            'slug' => Organization::generateUniqueSlug($name),
-            'owner_id' => $request->user()->id,
-            'document_limit' => $request->input('document_limit'),
-        ]);
+        $organization = DB::transaction(function () use ($request, $register, $password) {
+            $owner = $register->handle([
+                'name' => $request->string('owner_name')->toString(),
+                'email' => $request->string('owner_email')->toString(),
+                'password' => $password,
+                'organization_name' => $request->string('name')->toString(),
+            ]);
 
-        return $this->resource($organization);
+            $organization = $owner->currentOrganization;
+
+            if ($request->filled('document_limit')) {
+                $organization->update(['document_limit' => $request->integer('document_limit')]);
+            }
+
+            return $organization;
+        });
+
+        return $this->resource($organization)
+            ->additional(['temporary_password' => $password])
+            ->response()
+            ->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function update(UpdateOrganizationRequest $request, Organization $organization): AdminOrganizationResource

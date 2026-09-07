@@ -4,6 +4,7 @@ use App\Enums\OrganizationStatus;
 use App\Models\Document;
 use App\Models\Organization;
 use App\Models\Project;
+use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 
 it('rejects a non-admin user', function () {
@@ -36,34 +37,84 @@ it('lists every organization with counts, regardless of tenant', function () {
         ->assertJsonPath('data.1.projects_count', 1);
 });
 
-it('creates an organization owned by the acting admin', function () {
+it('creates an organization with a provisioned owner account', function () {
     $admin = createAdmin();
     Sanctum::actingAs($admin);
 
     $response = $this->postJson('/api/v1/admin/organizations', [
         'name' => 'Globex',
         'document_limit' => 250,
+        'owner_name' => 'Grace Owner',
+        'owner_email' => 'grace@globex.test',
     ])->assertCreated()
         ->assertJsonPath('data.name', 'Globex')
         ->assertJsonPath('data.document_limit', 250)
-        ->assertJsonPath('data.owner.id', $admin->id);
+        ->assertJsonPath('data.owner.email', 'grace@globex.test')
+        ->assertJsonStructure(['temporary_password']);
 
-    $this->assertDatabaseHas('organizations', [
-        'name' => 'Globex',
-        'owner_id' => $admin->id,
-        'document_limit' => 250,
-    ]);
+    $owner = User::where('email', 'grace@globex.test')->firstOrFail();
+    $organization = Organization::find($response->json('data.id'));
 
-    expect(Organization::find($response->json('data.id'))->slug)->toStartWith('globex-');
+    expect($owner->is_admin)->toBeFalse()
+        ->and($owner->current_organization_id)->toBe($organization->id)
+        ->and($organization->owner_id)->toBe($owner->id)
+        ->and($organization->owner_id)->not->toBe($admin->id)
+        ->and($owner->organizations()->pluck('role', 'organizations.id')->all())
+        ->toBe([$organization->id => 'owner'])
+        ->and($organization->slug)->toStartWith('globex-');
+});
+
+it('lets the provisioned owner sign in with the temporary password', function () {
+    $adminToken = createAdmin()->createToken('admin')->plainTextToken;
+
+    $password = $this->withToken($adminToken)->postJson('/api/v1/admin/organizations', [
+        'name' => 'Initech',
+        'owner_name' => 'Bill Lumbergh',
+        'owner_email' => 'bill@initech.test',
+    ])->assertCreated()->json('temporary_password');
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => 'bill@initech.test',
+        'password' => $password,
+    ])->assertOk()
+        ->assertJsonStructure(['token'])
+        ->assertJsonPath('user.current_organization.name', 'Initech');
+});
+
+it('scopes the provisioned owner to their new organization', function () {
+    $adminToken = createAdmin()->createToken('admin')->plainTextToken;
+
+    $this->withToken($adminToken)->postJson('/api/v1/admin/organizations', [
+        'name' => 'Initech',
+        'owner_name' => 'Bill Lumbergh',
+        'owner_email' => 'bill@initech.test',
+    ])->assertCreated();
+
+    Sanctum::actingAs(User::where('email', 'bill@initech.test')->firstOrFail());
+    $this->getJson('/api/v1/projects')->assertOk()->assertJsonCount(0, 'data');
 });
 
 it('creates an organization with no explicit limit', function () {
     Sanctum::actingAs(createAdmin());
 
-    $this->postJson('/api/v1/admin/organizations', ['name' => 'Initech'])
-        ->assertCreated()
+    $this->postJson('/api/v1/admin/organizations', [
+        'name' => 'Umbrella',
+        'owner_name' => 'Al Wesker',
+        'owner_email' => 'wesker@umbrella.test',
+    ])->assertCreated()
         ->assertJsonPath('data.document_limit', null)
         ->assertJsonPath('data.effective_document_limit', 1000);
+});
+
+it('rejects an owner email that already belongs to a user', function () {
+    createOwner(['email' => 'taken@example.com']);
+    Sanctum::actingAs(createAdmin());
+
+    $this->postJson('/api/v1/admin/organizations', [
+        'name' => 'Dupe',
+        'owner_name' => 'Someone',
+        'owner_email' => 'taken@example.com',
+    ])->assertUnprocessable()->assertJsonValidationErrors('owner_email');
 });
 
 it('validates the create payload', function () {
@@ -71,7 +122,7 @@ it('validates the create payload', function () {
 
     $this->postJson('/api/v1/admin/organizations', ['name' => '', 'document_limit' => -5])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors(['name', 'document_limit']);
+        ->assertJsonValidationErrors(['name', 'document_limit', 'owner_name', 'owner_email']);
 });
 
 it('updates an organization document limit', function () {
@@ -131,19 +182,15 @@ it('re-enables a disabled organization', function () {
     expect($target->fresh()->status)->toBe(OrganizationStatus::Active);
 });
 
-it('does not revoke the acting admin\'s token when disabling an org they own', function () {
+it('does not touch the acting admin\'s token when disabling an organization', function () {
     $admin = createAdmin();
     $adminToken = $admin->createToken('admin')->plainTextToken;
-
-    $orgId = $this->withToken($adminToken)
-        ->postJson('/api/v1/admin/organizations', ['name' => 'Admin Owned'])
-        ->assertCreated()->json('data.id');
+    $target = createOwner()->currentOrganization;
 
     $this->withToken($adminToken)
-        ->patchJson("/api/v1/admin/organizations/{$orgId}/status", ['status' => 'disabled'])
+        ->patchJson("/api/v1/admin/organizations/{$target->id}/status", ['status' => 'disabled'])
         ->assertOk();
 
-    // The admin's token survives and the admin API still works.
     expect($admin->tokens()->count())->toBe(1);
     $this->withToken($adminToken)->getJson('/api/v1/admin/organizations')->assertOk();
 });
