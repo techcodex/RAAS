@@ -177,3 +177,56 @@ export interface Conversation {
   created_at: string
   updated_at: string
 }
+
+// ── Employee query app ──────────────────────────────────────────────────────
+
+/** Owner's view of a project's publication. */
+export interface PublicationInfo {
+  slug: string
+  is_active: boolean
+  welcome_message: string | null
+  suggested_questions: string[]
+  daily_query_limit: number | null
+  employees_count?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AppEmployee {
+  id: number
+  name: string
+  email: string
+  is_active: boolean
+  last_seen_at: string | null
+  created_at: string
+}
+
+/** Public landing config an employee sees before signing in. */
+export interface PublicApp {
+  slug: string
+  name: string
+  welcome_message: string | null
+  suggested_questions: string[]
+}
+
+export interface EmployeeIdentity {
+  name: string
+  email: string
+}
+
+export interface AppMessage {
+  id: number
+  conversation_id: number
+  role: 'user' | 'assistant'
+  content: string
+  citations: Citation[]
+  created_at: string
+}
+
+export interface AppConversation {
+  id: number
+  title: string | null
+  messages?: AppMessage[]
+  created_at: string
+  updated_at: string
+}

@@ -39,5 +39,12 @@ class AppServiceProvider extends ServiceProvider
 
         // Registration: IP-based but generous enough for shared networks.
         RateLimiter::for('register', fn (Request $request) => Limit::perMinute(15)->by($request->ip()));
+
+        // Employee-app sign-in: throttle access-code guesses per email + IP.
+        RateLimiter::for('app-session', function (Request $request) {
+            $key = Str::lower((string) $request->input('email')).'|'.$request->ip();
+
+            return [Limit::perMinute(8)->by($key), Limit::perMinute(30)->by($request->ip())];
+        });
     }
 }

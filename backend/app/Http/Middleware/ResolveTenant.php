@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Enums\OrganizationStatus;
+use App\Models\User;
 use App\Support\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -21,8 +22,12 @@ class ResolveTenant
     {
         $user = $request->user();
 
-        $organization = $user?->currentOrganization
-            ?? $user?->organizations()->first();
+        // Employee (AppUser) tokens resolve through the same Sanctum guard but
+        // have no organization relations — keep them out of tenant routes.
+        abort_unless($user instanceof User, 403, 'This route is not available to employee accounts.');
+
+        $organization = $user->currentOrganization
+            ?? $user->organizations()->first();
 
         abort_if($organization === null, 403, 'No organization is associated with this account.');
         abort_if($organization->status === OrganizationStatus::Disabled, 403, 'This organization has been disabled.');

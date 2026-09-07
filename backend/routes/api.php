@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\App\ConversationController as AppConversationController;
+use App\Http\Controllers\Api\App\PublicationController as AppPublicationController;
+use App\Http\Controllers\Api\App\QueryController as AppQueryController;
+use App\Http\Controllers\Api\App\SessionController as AppSessionController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\OrganizationController as AdminOrganizationController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -7,9 +11,11 @@ use App\Http\Controllers\Api\V1\ChunkController;
 use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\DocumentProcessingController;
+use App\Http\Controllers\Api\V1\EmployeeController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProjectCredentialController;
 use App\Http\Controllers\Api\V1\ProjectExportController;
+use App\Http\Controllers\Api\V1\PublicationController;
 use App\Http\Controllers\Api\V1\QueryController;
 use App\Http\Controllers\Api\V1\StrategyController;
 use Illuminate\Support\Facades\Route;
@@ -27,9 +33,10 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
     Route::post('/auth/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:login');
 
-    // Session routes work for any authenticated account, including platform
+    // Session routes work for any authenticated platform account, including
     // admins who have no organization (so no `tenant` middleware here).
-    Route::middleware('auth:sanctum')->group(function () {
+    // `platform-account` keeps employee (AppUser) tokens out.
+    Route::middleware(['auth:sanctum', 'platform-account'])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/me', [AuthController::class, 'me']);
     });
@@ -55,6 +62,15 @@ Route::prefix('v1')->group(function () {
         Route::get('/projects/{project}/conversations', [ConversationController::class, 'index']);
         Route::get('/conversations/{conversation}', [ConversationController::class, 'show']);
         Route::delete('/conversations/{conversation}', [ConversationController::class, 'destroy']);
+
+        Route::get('/projects/{project}/publication', [PublicationController::class, 'show']);
+        Route::put('/projects/{project}/publication', [PublicationController::class, 'update']);
+
+        Route::get('/projects/{project}/publication/employees', [EmployeeController::class, 'index']);
+        Route::post('/projects/{project}/publication/employees', [EmployeeController::class, 'store']);
+        Route::patch('/projects/{project}/publication/employees/{employee}', [EmployeeController::class, 'update']);
+        Route::delete('/projects/{project}/publication/employees/{employee}', [EmployeeController::class, 'destroy']);
+        Route::post('/projects/{project}/publication/employees/{employee}/reset-code', [EmployeeController::class, 'resetCode']);
     });
 
     // Platform administration — operates across all tenants, so no `tenant` middleware.
@@ -66,5 +82,18 @@ Route::prefix('v1')->group(function () {
         Route::post('/organizations', [AdminOrganizationController::class, 'store']);
         Route::patch('/organizations/{organization}', [AdminOrganizationController::class, 'update']);
         Route::patch('/organizations/{organization}/status', [AdminOrganizationController::class, 'updateStatus']);
+    });
+});
+
+// Employee query app — public slug, no tenant context, its own auth guard.
+Route::prefix('app')->group(function () {
+    Route::get('/{slug}', [AppPublicationController::class, 'show']);
+    Route::post('/{slug}/session', [AppSessionController::class, 'store'])->middleware('throttle:app-session');
+
+    Route::middleware(['auth:sanctum', 'app-user'])->group(function () {
+        Route::delete('/{slug}/session', [AppSessionController::class, 'destroy']);
+        Route::post('/{slug}/query', [AppQueryController::class, 'store']);
+        Route::get('/{slug}/conversations', [AppConversationController::class, 'index']);
+        Route::get('/{slug}/conversations/{conversation}', [AppConversationController::class, 'show']);
     });
 });

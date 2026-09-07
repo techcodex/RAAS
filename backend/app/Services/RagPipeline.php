@@ -24,13 +24,19 @@ class RagPipeline
         private readonly LlmClientResolver $llmResolver,
     ) {}
 
-    public function ask(
+    /**
+     * Run retrieval + grounded completion for one question, without persisting
+     * anything. Shared by the owner query flow and the employee app.
+     *
+     * @param  list<array{role: string, content: string}>  $history
+     */
+    public function answer(
         Project $project,
         ProjectCredential $credential,
         string $question,
-        ?Conversation $conversation,
+        array $history = [],
         ?int $topK = null,
-    ): Message {
+    ): RagAnswer {
         if ($project->embedding_model_id === null) {
             throw new RagException('This project has no processed documents yet — process at least one before asking questions.');
         }
@@ -49,27 +55,44 @@ class RagPipeline
         );
         $matches = $search['results'] ?? [];
 
-        $conversation ??= $project->conversations()->create([
-            'title' => Str::limit($question, 60),
-        ]);
-
-        $history = $conversation->messages()->orderBy('id')->get()
-            ->map(fn (Message $m) => ['role' => $m->role, 'content' => $m->content]);
-
-        $conversation->messages()->create(['role' => 'user', 'content' => $question]);
-
         $answer = $this->llmResolver->for($credential->provider)->complete(
             apiKey: $credential->api_key,
             model: $credential->model,
             system: $this->systemPrompt($matches),
-            messages: [...$history->all(), ['role' => 'user', 'content' => $question]],
+            messages: [...$history, ['role' => 'user', 'content' => $question]],
         );
+
+        return new RagAnswer($answer, $this->citations($matches));
+    }
+
+    /**
+     * Owner-side query: answer, then persist both turns to the project's
+     * `conversations`/`messages`.
+     */
+    public function ask(
+        Project $project,
+        ProjectCredential $credential,
+        string $question,
+        ?Conversation $conversation,
+        ?int $topK = null,
+    ): Message {
+        $history = $conversation
+            ? $conversation->messages()->orderBy('id')->get()
+                ->map(fn (Message $m) => ['role' => $m->role, 'content' => $m->content])->all()
+            : [];
+
+        $result = $this->answer($project, $credential, $question, $history, $topK);
+
+        $conversation ??= $project->conversations()->create([
+            'title' => Str::limit($question, 60),
+        ]);
+        $conversation->messages()->create(['role' => 'user', 'content' => $question]);
 
         return $conversation->messages()->create([
             'role' => 'assistant',
-            'content' => $answer->text,
-            'citations' => $this->citations($matches),
-            'usage' => $answer->toUsageArray(),
+            'content' => $result->answer->text,
+            'citations' => $result->citations,
+            'usage' => $result->answer->toUsageArray(),
         ]);
     }
 

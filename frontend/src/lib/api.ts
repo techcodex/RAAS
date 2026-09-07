@@ -51,6 +51,71 @@ api.interceptors.response.use(
   },
 )
 
+/**
+ * HTTP client for the employee query app (`/api/app/*`). A separate identity
+ * from the main `api` client: its own token, stored per publication slug so one
+ * browser can be signed in to more than one company's app.
+ */
+export const appApi = axios.create({
+  baseURL: '/api/app',
+  headers: { Accept: 'application/json' },
+})
+
+let activeAppSlug: string | null = null
+
+export function appTokenKey(slug: string): string {
+  return `raas.app.${slug}`
+}
+
+export function getAppToken(slug: string): string | null {
+  try {
+    return localStorage.getItem(appTokenKey(slug))
+  } catch {
+    return null
+  }
+}
+
+export function setAppToken(slug: string, token: string | null): void {
+  try {
+    if (token) localStorage.setItem(appTokenKey(slug), token)
+    else localStorage.removeItem(appTokenKey(slug))
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** Which publication's token the `appApi` client should send. */
+export function setActiveAppSlug(slug: string | null): void {
+  activeAppSlug = slug
+}
+
+appApi.interceptors.request.use((config) => {
+  if (activeAppSlug) {
+    const token = getAppToken(activeAppSlug)
+    if (token) config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+let onAppUnauthorized: (() => void) | null = null
+export function setAppUnauthorizedHandler(fn: () => void): void {
+  onAppUnauthorized = fn
+}
+
+appApi.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    // 401 = token gone; 403 = employee deactivated (or wrong publication).
+    // Either way the session is no longer valid — clear it and fall back to sign-in.
+    const status = error.response?.status
+    if ((status === 401 || status === 403) && activeAppSlug) {
+      setAppToken(activeAppSlug, null)
+      onAppUnauthorized?.()
+    }
+    return Promise.reject(error)
+  },
+)
+
 /** Pull a flat list of messages out of a Laravel 422 validation error. */
 export function validationErrors(error: unknown): Record<string, string[]> {
   if (axios.isAxiosError(error) && error.response?.status === 422) {

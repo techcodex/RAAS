@@ -8,6 +8,7 @@ import DocumentTable from '@/components/DocumentTable.vue'
 import DocumentUploader from '@/components/DocumentUploader.vue'
 import EmbedderPicker from '@/components/EmbedderPicker.vue'
 import LlmSettings from '@/components/LlmSettings.vue'
+import PublishSettings from '@/components/PublishSettings.vue'
 import QueryChat from '@/components/QueryChat.vue'
 import StrategyPicker from '@/components/StrategyPicker.vue'
 import { api, errorMessage } from '@/lib/api'
@@ -21,7 +22,7 @@ const error = ref('')
 const actionError = ref('')
 const exporting = ref(false)
 const previewed = ref<DocumentFile | null>(null)
-const tab = ref<'documents' | 'ask'>('documents')
+const tab = ref<'documents' | 'ask' | 'publish'>('documents')
 const hasCredential = ref(false)
 
 const strategy = ref('auto')
@@ -150,6 +151,13 @@ onMounted(load)
         >
           Ask
         </button>
+        <button
+          class="border-b-2 px-1 pb-2"
+          :class="tab === 'publish' ? 'border-indigo-600 font-medium text-indigo-600' : 'border-transparent text-gray-500'"
+          @click="tab = 'publish'"
+        >
+          Publish
+        </button>
       </nav>
 
       <template v-if="tab === 'documents'">
@@ -190,7 +198,7 @@ onMounted(load)
         </section>
       </template>
 
-      <template v-else>
+      <template v-else-if="tab === 'ask'">
         <section class="mt-6">
           <LlmSettings :project-id="project.id" @update:configured="hasCredential = $event" />
         </section>
@@ -204,6 +212,10 @@ onMounted(load)
           <QueryChat :project-id="project.id" :enabled="canAsk" />
         </section>
       </template>
+
+      <section v-else class="mt-6">
+        <PublishSettings :project-id="project.id" />
+      </section>
     </template>
   </AppShell>
 </template>

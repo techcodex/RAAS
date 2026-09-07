@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureAppUser;
+use App\Http\Middleware\EnsurePlatformAccount;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveTenant;
 use Illuminate\Foundation\Application;
@@ -19,6 +21,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant' => ResolveTenant::class,
             'admin' => EnsureUserIsAdmin::class,
+            'app-user' => EnsureAppUser::class,
+            'platform-account' => EnsurePlatformAccount::class,
         ]);
 
         // Tenant must be resolved before route-model bindings so the

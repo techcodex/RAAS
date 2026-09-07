@@ -57,11 +57,34 @@ const router = createRouter({
         },
       ],
     },
+    {
+      path: '/app/:slug',
+      component: () => import('@/components/employee/EmployeeAppLayout.vue'),
+      meta: { employeeArea: true },
+      props: true,
+      children: [
+        {
+          path: '',
+          name: 'employee-app',
+          component: () => import('@/views/employee/EmployeeChatView.vue'),
+        },
+        {
+          path: 'c/:conversationId',
+          name: 'employee-conversation',
+          component: () => import('@/views/employee/EmployeeChatView.vue'),
+          props: true,
+        },
+      ],
+    },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 
 router.beforeEach(async (to) => {
+  // The employee app is a self-contained surface with its own auth (handled by
+  // its layout) — the platform session guard does not apply.
+  if (to.meta.employeeArea) return
+
   const session = useSessionStore()
   if (!session.ready) await session.bootstrap()
 

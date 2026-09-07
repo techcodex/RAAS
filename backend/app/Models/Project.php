@@ -45,6 +45,11 @@ class Project extends Model
         return $this->hasOne(ProjectCredential::class);
     }
 
+    public function publication(): HasOne
+    {
+        return $this->hasOne(AppPublication::class);
+    }
+
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);
