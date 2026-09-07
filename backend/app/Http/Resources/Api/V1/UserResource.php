@@ -20,7 +20,10 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
-            'current_organization' => new OrganizationResource($this->whenLoaded('currentOrganization')),
+            'is_admin' => (bool) $this->is_admin,
+            'current_organization' => $this->currentOrganization
+                ? new OrganizationResource($this->currentOrganization)
+                : null,
             'created_at' => $this->created_at,
         ];
     }

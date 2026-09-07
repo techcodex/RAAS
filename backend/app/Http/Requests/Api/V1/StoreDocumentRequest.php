@@ -45,13 +45,18 @@ class StoreDocumentRequest extends FormRequest
                 }
 
                 $project = $this->route('project');
-                $quota = (int) config('raas.documents.per_project_quota');
+                $limit = $project->organization->effectiveDocumentLimit();
+
+                if ($limit === null) {
+                    return;
+                }
+
                 $incoming = count($this->file('files', []));
 
-                if ($project->documents()->count() + $incoming > $quota) {
+                if ($project->organization->documents()->count() + $incoming > $limit) {
                     $validator->errors()->add(
                         'files',
-                        "This project's document limit ({$quota}) would be exceeded.",
+                        "This organization's document limit ({$limit}) would be exceeded.",
                     );
                 }
             },

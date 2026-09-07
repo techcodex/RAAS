@@ -18,6 +18,12 @@ const router = createRouter({
       meta: { guest: true },
     },
     {
+      path: '/admin/login',
+      name: 'admin-login',
+      component: () => import('@/views/AdminLoginView.vue'),
+      meta: { guest: true, adminArea: true },
+    },
+    {
       path: '/',
       name: 'projects',
       component: () => import('@/views/ProjectsView.vue'),
@@ -28,6 +34,12 @@ const router = createRouter({
       component: () => import('@/views/ProjectView.vue'),
       props: true,
     },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('@/views/AdminView.vue'),
+      meta: { adminArea: true },
+    },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
@@ -36,11 +48,30 @@ router.beforeEach(async (to) => {
   const session = useSessionStore()
   if (!session.ready) await session.bootstrap()
 
-  if (!to.meta.guest && !session.isAuthenticated) {
+  const isAdminArea = to.meta.adminArea === true
+
+  // Guest pages (login / register / admin login): bounce authenticated users home.
+  if (to.meta.guest) {
+    if (session.isAuthenticated) {
+      return session.isAdmin ? { name: 'admin' } : { name: 'projects' }
+    }
+    return
+  }
+
+  // Protected admin pages.
+  if (isAdminArea) {
+    if (!session.isAuthenticated || !session.isAdmin) {
+      return { name: 'admin-login' }
+    }
+    return
+  }
+
+  // Protected organization pages.
+  if (!session.isAuthenticated) {
     return { name: 'login', query: to.path === '/' ? {} : { redirect: to.fullPath } }
   }
-  if (to.meta.guest && session.isAuthenticated) {
-    return { name: 'projects' }
+  if (session.isAdmin) {
+    return { name: 'admin' }
   }
 })
 

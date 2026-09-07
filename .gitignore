@@ -11,6 +11,10 @@ CLAUDE.md
 .claude/
 **/.claude/
 .mcp.json
+graphify-out/
+.graphify/
+.graphifyignore
+HANDOFF.md
 
 backend/vendor/
 backend/node_modules/

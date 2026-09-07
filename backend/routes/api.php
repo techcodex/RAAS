@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\OrganizationController as AdminOrganizationController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ChunkController;
 use App\Http\Controllers\Api\V1\ConversationController;
@@ -23,11 +24,16 @@ Route::get('/health', function () {
 Route::prefix('v1')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:register');
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
+    Route::post('/auth/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:login');
 
-    Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
+    // Session routes work for any authenticated account, including platform
+    // admins who have no organization (so no `tenant` middleware here).
+    Route::middleware('auth:sanctum')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/me', [AuthController::class, 'me']);
+    });
 
+    Route::middleware(['auth:sanctum', 'tenant'])->group(function () {
         Route::get('/strategies', [StrategyController::class, 'index']);
 
         Route::apiResource('projects', ProjectController::class);
@@ -48,5 +54,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/projects/{project}/conversations', [ConversationController::class, 'index']);
         Route::get('/conversations/{conversation}', [ConversationController::class, 'show']);
         Route::delete('/conversations/{conversation}', [ConversationController::class, 'destroy']);
+    });
+
+    // Platform administration — operates across all tenants, so no `tenant` middleware.
+    Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+        Route::get('/organizations', [AdminOrganizationController::class, 'index']);
+        Route::post('/organizations', [AdminOrganizationController::class, 'store']);
+        Route::patch('/organizations/{organization}', [AdminOrganizationController::class, 'update']);
     });
 });

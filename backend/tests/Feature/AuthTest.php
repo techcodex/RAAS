@@ -73,6 +73,35 @@ it('rejects login with a wrong password', function () {
     ])->assertUnprocessable()->assertJsonValidationErrors('email');
 });
 
+it('rejects a platform admin at the organization login', function () {
+    createAdmin(['email' => 'root@raas.test', 'password' => 'admin-pw']);
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => 'root@raas.test',
+        'password' => 'admin-pw',
+    ])->assertUnprocessable()->assertJsonValidationErrors('email');
+});
+
+it('logs a platform admin in through the admin login', function () {
+    createAdmin(['email' => 'root@raas.test', 'password' => 'admin-pw']);
+
+    $this->postJson('/api/v1/auth/admin/login', [
+        'email' => 'root@raas.test',
+        'password' => 'admin-pw',
+    ])->assertOk()
+        ->assertJsonPath('user.is_admin', true)
+        ->assertJsonPath('user.current_organization', null);
+});
+
+it('rejects a non-admin at the admin login', function () {
+    createOwner(['email' => 'ada@example.com', 'password' => 'secret-pw']);
+
+    $this->postJson('/api/v1/auth/admin/login', [
+        'email' => 'ada@example.com',
+        'password' => 'secret-pw',
+    ])->assertUnprocessable()->assertJsonValidationErrors('email');
+});
+
 it('returns the authenticated user from /auth/me', function () {
     $user = createOwner();
     Sanctum::actingAs($user);
@@ -81,6 +110,15 @@ it('returns the authenticated user from /auth/me', function () {
         ->assertOk()
         ->assertJsonPath('data.id', $user->id)
         ->assertJsonPath('data.current_organization.id', $user->current_organization_id);
+});
+
+it('returns a platform admin from /auth/me without an organization', function () {
+    Sanctum::actingAs(createAdmin());
+
+    $this->getJson('/api/v1/auth/me')
+        ->assertOk()
+        ->assertJsonPath('data.is_admin', true)
+        ->assertJsonPath('data.current_organization', null);
 });
 
 it('rejects unauthenticated access to protected routes', function () {

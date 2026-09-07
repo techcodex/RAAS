@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Actions\RegisterOrganizationOwner;
 use App\Models\Project;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -23,6 +24,12 @@ class DatabaseSeeder extends Seeder
         Project::factory()->for($user->currentOrganization)->createMany([
             ['name' => 'Employee Handbook'],
             ['name' => 'Security Policies'],
+        ]);
+
+        // Platform administrator — no organization, signs in through the admin portal.
+        User::factory()->admin()->create([
+            'name' => 'Platform Admin',
+            'email' => 'admin@raas.test',
         ]);
     }
 }

@@ -13,8 +13,10 @@ app.use(router)
 
 setUnauthorizedHandler(() => {
   useSessionStore().clear()
-  if (router.currentRoute.value.name !== 'login') {
-    router.push({ name: 'login' })
+  const current = router.currentRoute.value
+  const target = current.meta.adminArea === true ? 'admin-login' : 'login'
+  if (current.name !== target) {
+    router.push({ name: target })
   }
 })
 

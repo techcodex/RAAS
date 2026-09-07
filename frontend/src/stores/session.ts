@@ -20,6 +20,7 @@ export const useSessionStore = defineStore('session', () => {
   const ready = ref(false)
 
   const isAuthenticated = computed(() => user.value !== null)
+  const isAdmin = computed(() => user.value?.is_admin === true)
   const organization = computed(() => user.value?.current_organization ?? null)
 
   async function register(payload: Registration): Promise<void> {
@@ -30,6 +31,12 @@ export const useSessionStore = defineStore('session', () => {
 
   async function login(payload: Credentials): Promise<void> {
     const { data } = await api.post<{ token: string; user: User }>('/auth/login', payload)
+    setToken(data.token)
+    user.value = data.user
+  }
+
+  async function adminLogin(payload: Credentials): Promise<void> {
+    const { data } = await api.post<{ token: string; user: User }>('/auth/admin/login', payload)
     setToken(data.token)
     user.value = data.user
   }
@@ -69,9 +76,11 @@ export const useSessionStore = defineStore('session', () => {
     user,
     ready,
     isAuthenticated,
+    isAdmin,
     organization,
     register,
     login,
+    adminLogin,
     fetchMe,
     logout,
     bootstrap,

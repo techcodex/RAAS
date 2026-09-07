@@ -9,7 +9,21 @@ export interface User {
   id: number
   name: string
   email: string
+  is_admin: boolean
   current_organization: Organization | null
+  created_at: string
+}
+
+export interface AdminOrganization {
+  id: number
+  name: string
+  slug: string
+  document_limit: number | null
+  effective_document_limit: number | null
+  members_count: number
+  projects_count: number
+  documents_count: number
+  owner: { id: number | null; name: string | null; email: string | null }
   created_at: string
 }
 

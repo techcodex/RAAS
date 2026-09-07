@@ -17,9 +17,22 @@ return [
 
         // Accepted extensions (the `mimes` rule inspects file contents).
         'allowed_extensions' => ['pdf', 'doc', 'docx', 'txt', 'md', 'markdown', 'html', 'csv', 'pptx'],
+    ],
 
-        // Max documents retained per project.
-        'per_project_quota' => (int) env('RAAS_DOCUMENTS_PER_PROJECT_QUOTA', 500),
+    /*
+    |--------------------------------------------------------------------------
+    | Organizations
+    |--------------------------------------------------------------------------
+    */
+
+    'organizations' => [
+        // Default max documents an organization may retain across all its
+        // projects, used when the organization has no explicit `document_limit`.
+        // Null means unlimited.
+        'default_document_limit' => match (($value = env('RAAS_ORG_DEFAULT_DOCUMENT_LIMIT', 1000))) {
+            null, '', 'null' => null,
+            default => (int) $value,
+        },
     ],
 
 ];

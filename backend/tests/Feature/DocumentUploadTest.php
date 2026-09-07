@@ -86,10 +86,9 @@ it('requires at least one file', function () {
         ->assertJsonValidationErrors('files');
 });
 
-it('enforces the per-project document quota', function () {
-    config(['raas.documents.per_project_quota' => 1]);
-
+it('enforces the organization document limit', function () {
     $user = createOwner();
+    $user->currentOrganization->update(['document_limit' => 1]);
     $project = Project::factory()->for($user->currentOrganization)->create();
     Document::factory()->forProject($project)->create();
     Sanctum::actingAs($user);
@@ -97,6 +96,35 @@ it('enforces the per-project document quota', function () {
     $this->postJson("/api/v1/projects/{$project->id}/documents", [
         'files' => [UploadedFile::fake()->create('extra.pdf', 10, 'application/pdf')],
     ])->assertUnprocessable()->assertJsonValidationErrors('files');
+
+    expect(Document::count())->toBe(1);
+});
+
+it('counts documents across all of an organization\'s projects toward the limit', function () {
+    $user = createOwner();
+    $user->currentOrganization->update(['document_limit' => 2]);
+    $projectA = Project::factory()->for($user->currentOrganization)->create();
+    $projectB = Project::factory()->for($user->currentOrganization)->create();
+    Document::factory()->forProject($projectA)->create();
+    Document::factory()->forProject($projectB)->create();
+    Sanctum::actingAs($user);
+
+    $this->postJson("/api/v1/projects/{$projectA->id}/documents", [
+        'files' => [UploadedFile::fake()->create('extra.pdf', 10, 'application/pdf')],
+    ])->assertUnprocessable()->assertJsonValidationErrors('files');
+});
+
+it('allows uploads when the organization has no limit', function () {
+    config(['raas.organizations.default_document_limit' => null]);
+
+    $user = createOwner();
+    $project = Project::factory()->for($user->currentOrganization)->create();
+    Document::factory()->forProject($project)->count(3)->create();
+    Sanctum::actingAs($user);
+
+    $this->postJson("/api/v1/projects/{$project->id}/documents", [
+        'files' => [UploadedFile::fake()->create('extra.pdf', 10, 'application/pdf')],
+    ])->assertCreated();
 });
 
 it('lists documents for a project newest first', function () {

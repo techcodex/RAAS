@@ -26,3 +26,13 @@ function createOwner(array $attributes = []): User
         'password' => 'password',
     ], $attributes));
 }
+
+/**
+ * Create a platform administrator — a platform-only account with no organization.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function createAdmin(array $attributes = []): User
+{
+    return User::factory()->admin()->create($attributes);
+}
