@@ -5,7 +5,6 @@ namespace App\Actions;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class RegisterOrganizationOwner
 {
@@ -28,7 +27,7 @@ class RegisterOrganizationOwner
 
             $organization = Organization::create([
                 'name' => $orgName,
-                'slug' => $this->uniqueSlug($orgName),
+                'slug' => Organization::generateUniqueSlug($orgName),
                 'owner_id' => $user->id,
             ]);
 
@@ -38,16 +37,5 @@ class RegisterOrganizationOwner
 
             return $user->load('currentOrganization');
         });
-    }
-
-    private function uniqueSlug(string $name): string
-    {
-        $base = Str::slug($name) ?: 'org';
-
-        do {
-            $slug = $base.'-'.Str::lower(Str::random(6));
-        } while (Organization::where('slug', $slug)->exists());
-
-        return $slug;
     }
 }

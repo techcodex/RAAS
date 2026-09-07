@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\OrganizationController as AdminOrganizationController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\ChunkController;
@@ -58,8 +59,12 @@ Route::prefix('v1')->group(function () {
 
     // Platform administration — operates across all tenants, so no `tenant` middleware.
     Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+        Route::get('/stats', [AdminDashboardController::class, 'index']);
+        Route::get('/settings', [AdminDashboardController::class, 'settings']);
+
         Route::get('/organizations', [AdminOrganizationController::class, 'index']);
         Route::post('/organizations', [AdminOrganizationController::class, 'store']);
         Route::patch('/organizations/{organization}', [AdminOrganizationController::class, 'update']);
+        Route::patch('/organizations/{organization}/status', [AdminOrganizationController::class, 'updateStatus']);
     });
 });

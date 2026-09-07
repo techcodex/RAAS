@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\OrganizationStatus;
 use App\Models\Organization;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
@@ -71,6 +72,27 @@ it('rejects login with a wrong password', function () {
         'email' => 'ada@example.com',
         'password' => 'wrong',
     ])->assertUnprocessable()->assertJsonValidationErrors('email');
+});
+
+it('rejects a user whose organization has been disabled', function () {
+    $owner = createOwner(['email' => 'ada@example.com', 'password' => 'secret-pw']);
+    $owner->currentOrganization->forceFill(['status' => OrganizationStatus::Disabled])->save();
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => 'ada@example.com',
+        'password' => 'secret-pw',
+    ])->assertUnprocessable()->assertJsonValidationErrors('email');
+});
+
+it('lets a user log in again once their organization is re-enabled', function () {
+    $owner = createOwner(['email' => 'ada@example.com', 'password' => 'secret-pw']);
+    $owner->currentOrganization->forceFill(['status' => OrganizationStatus::Disabled])->save();
+    $owner->currentOrganization->forceFill(['status' => OrganizationStatus::Active])->save();
+
+    $this->postJson('/api/v1/auth/login', [
+        'email' => 'ada@example.com',
+        'password' => 'secret-pw',
+    ])->assertOk();
 });
 
 it('rejects a platform admin at the organization login', function () {

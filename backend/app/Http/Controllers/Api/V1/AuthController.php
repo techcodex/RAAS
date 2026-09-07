@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\RegisterOrganizationOwner;
+use App\Enums\OrganizationStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
 use App\Http\Requests\Api\V1\RegisterRequest;
@@ -32,6 +33,15 @@ class AuthController extends Controller
         if ($user->is_admin) {
             throw ValidationException::withMessages([
                 'email' => 'Platform administrators sign in through the admin portal.',
+            ]);
+        }
+
+        // The org ResolveTenant would resolve for this user on every request.
+        $organization = $user->currentOrganization ?? $user->organizations()->first();
+
+        if ($organization?->status === OrganizationStatus::Disabled) {
+            throw ValidationException::withMessages([
+                'email' => 'Your organization has been disabled. Contact your administrator.',
             ]);
         }
 

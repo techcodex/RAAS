@@ -19,7 +19,7 @@ async function submit() {
   generalError.value = ''
   try {
     await session.adminLogin({ ...form })
-    router.push({ name: 'admin' })
+    router.push({ name: 'admin-dashboard' })
   } catch (e) {
     errors.value = validationErrors(e)
     if (Object.keys(errors.value).length === 0) generalError.value = errorMessage(e)

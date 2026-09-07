@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\OrganizationStatus;
 use App\Models\Document;
 use App\Models\Organization;
 use App\Models\Project;
@@ -28,6 +29,7 @@ it('lists every organization with counts, regardless of tenant', function () {
         ->assertOk()
         ->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.name', 'Alpha Org')
+        ->assertJsonPath('data.0.status', 'active')
         ->assertJsonPath('data.0.documents_count', 0)
         ->assertJsonPath('data.1.name', 'Beta Org')
         ->assertJsonPath('data.1.documents_count', 2)
@@ -86,6 +88,81 @@ it('updates an organization document limit', function () {
         ->assertJsonPath('data.document_limit', null);
 
     expect($target->fresh()->document_limit)->toBeNull();
+});
+
+it('disables an organization and revokes its members\' tokens', function () {
+    $adminToken = createAdmin()->createToken('admin')->plainTextToken;
+    $owner = createOwner();
+    $owner->createToken('device');
+
+    $this->withToken($adminToken)
+        ->patchJson("/api/v1/admin/organizations/{$owner->current_organization_id}/status", ['status' => 'disabled'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'disabled');
+
+    expect($owner->currentOrganization->fresh()->status)->toBe(OrganizationStatus::Disabled)
+        ->and($owner->tokens()->count())->toBe(0);
+});
+
+it('leaves other organizations\' tokens alone when disabling one', function () {
+    $adminToken = createAdmin()->createToken('admin')->plainTextToken;
+    $target = createOwner();
+    $target->createToken('device');
+    $bystander = createOwner();
+    $bystander->createToken('device');
+
+    $this->withToken($adminToken)
+        ->patchJson("/api/v1/admin/organizations/{$target->current_organization_id}/status", ['status' => 'disabled'])
+        ->assertOk();
+
+    expect($target->tokens()->count())->toBe(0)
+        ->and($bystander->tokens()->count())->toBe(1);
+});
+
+it('re-enables a disabled organization', function () {
+    $admin = createAdmin();
+    $target = Organization::factory()->disabled()->create();
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/v1/admin/organizations/{$target->id}/status", ['status' => 'active'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'active');
+
+    expect($target->fresh()->status)->toBe(OrganizationStatus::Active);
+});
+
+it('does not revoke the acting admin\'s token when disabling an org they own', function () {
+    $admin = createAdmin();
+    $adminToken = $admin->createToken('admin')->plainTextToken;
+
+    $orgId = $this->withToken($adminToken)
+        ->postJson('/api/v1/admin/organizations', ['name' => 'Admin Owned'])
+        ->assertCreated()->json('data.id');
+
+    $this->withToken($adminToken)
+        ->patchJson("/api/v1/admin/organizations/{$orgId}/status", ['status' => 'disabled'])
+        ->assertOk();
+
+    // The admin's token survives and the admin API still works.
+    expect($admin->tokens()->count())->toBe(1);
+    $this->withToken($adminToken)->getJson('/api/v1/admin/organizations')->assertOk();
+});
+
+it('validates the status value', function () {
+    Sanctum::actingAs(createAdmin());
+    $target = createOwner()->currentOrganization;
+
+    $this->patchJson("/api/v1/admin/organizations/{$target->id}/status", ['status' => 'bogus'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('status');
+});
+
+it('rejects a non-admin from the status endpoint', function () {
+    $target = createOwner()->currentOrganization;
+    Sanctum::actingAs(createOwner());
+
+    $this->patchJson("/api/v1/admin/organizations/{$target->id}/status", ['status' => 'disabled'])
+        ->assertForbidden();
 });
 
 it('does not expose the is_admin flag as mass-assignable on register', function () {

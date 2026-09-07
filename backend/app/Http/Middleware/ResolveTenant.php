@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\OrganizationStatus;
 use App\Support\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class ResolveTenant
             ?? $user?->organizations()->first();
 
         abort_if($organization === null, 403, 'No organization is associated with this account.');
+        abort_if($organization->status === OrganizationStatus::Disabled, 403, 'This organization has been disabled.');
 
         $this->tenant->set($organization);
 

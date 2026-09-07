@@ -36,9 +36,26 @@ const router = createRouter({
     },
     {
       path: '/admin',
-      name: 'admin',
-      component: () => import('@/views/AdminView.vue'),
+      component: () => import('@/components/AdminLayout.vue'),
       meta: { adminArea: true },
+      children: [
+        { path: '', redirect: { name: 'admin-dashboard' } },
+        {
+          path: 'dashboard',
+          name: 'admin-dashboard',
+          component: () => import('@/views/admin/AdminDashboardView.vue'),
+        },
+        {
+          path: 'organizations',
+          name: 'admin-organizations',
+          component: () => import('@/views/admin/AdminOrganizationsView.vue'),
+        },
+        {
+          path: 'settings',
+          name: 'admin-settings',
+          component: () => import('@/views/admin/AdminSettingsView.vue'),
+        },
+      ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
@@ -53,7 +70,7 @@ router.beforeEach(async (to) => {
   // Guest pages (login / register / admin login): bounce authenticated users home.
   if (to.meta.guest) {
     if (session.isAuthenticated) {
-      return session.isAdmin ? { name: 'admin' } : { name: 'projects' }
+      return session.isAdmin ? { name: 'admin-dashboard' } : { name: 'projects' }
     }
     return
   }
@@ -71,7 +88,7 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: to.path === '/' ? {} : { redirect: to.fullPath } }
   }
   if (session.isAdmin) {
-    return { name: 'admin' }
+    return { name: 'admin-dashboard' }
   }
 })
 

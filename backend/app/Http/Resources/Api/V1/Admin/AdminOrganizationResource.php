@@ -20,6 +20,7 @@ class AdminOrganizationResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'slug' => $this->slug,
+            'status' => $this->status,
             'document_limit' => $this->document_limit,
             'effective_document_limit' => $this->effectiveDocumentLimit(),
             'members_count' => $this->whenCounted('members'),
@@ -31,6 +32,7 @@ class AdminOrganizationResource extends JsonResource
                 'email' => $this->owner?->email,
             ],
             'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
         ];
     }
 }

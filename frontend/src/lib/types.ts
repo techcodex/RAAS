@@ -14,10 +14,13 @@ export interface User {
   created_at: string
 }
 
+export type OrganizationStatus = 'active' | 'disabled'
+
 export interface AdminOrganization {
   id: number
   name: string
   slug: string
+  status: OrganizationStatus
   document_limit: number | null
   effective_document_limit: number | null
   members_count: number
@@ -25,6 +28,18 @@ export interface AdminOrganization {
   documents_count: number
   owner: { id: number | null; name: string | null; email: string | null }
   created_at: string
+  updated_at: string
+}
+
+export interface AdminStats {
+  organizations: { total: number; active: number; disabled: number }
+  projects: { total: number }
+  documents: { total: number; by_status: Record<DocumentStatus, number> }
+}
+
+export interface AdminSettings {
+  documents: { max_size_kb: number; allowed_extensions: string[] }
+  organizations: { default_document_limit: number | null }
 }
 
 export type DocumentStatus =

@@ -11,6 +11,8 @@ CLAUDE.md
 .claude/
 **/.claude/
 .mcp.json
+.agents/
+skills-lock.json
 graphify-out/
 .graphify/
 .graphifyignore

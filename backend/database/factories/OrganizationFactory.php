@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\OrganizationStatus;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -23,6 +24,12 @@ class OrganizationFactory extends Factory
             'name' => $name,
             'slug' => Str::slug($name).'-'.Str::lower(Str::random(6)),
             'owner_id' => User::factory(),
+            'status' => OrganizationStatus::Active,
         ];
+    }
+
+    public function disabled(): static
+    {
+        return $this->state(fn () => ['status' => OrganizationStatus::Disabled]);
     }
 }
