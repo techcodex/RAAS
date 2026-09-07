@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ReembedStatus;
 use App\Exceptions\RagException;
 use App\Models\Conversation;
 use App\Models\Message;
@@ -32,6 +33,12 @@ class RagPipeline
     ): Message {
         if ($project->embedding_model_id === null) {
             throw new RagException('This project has no processed documents yet — process at least one before asking questions.');
+        }
+
+        if ($project->reembed_status !== null) {
+            throw new RagException($project->reembed_status === ReembedStatus::Failed
+                ? 'The last re-embedding of this project failed. Change the embedding model to try again.'
+                : 'This project is re-embedding its documents — querying will be available once it finishes.');
         }
 
         $search = $this->rag->search(

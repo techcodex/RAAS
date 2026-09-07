@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ReembedStatus;
 use App\Exceptions\RagException;
 use App\Models\Conversation;
 use App\Models\Project;
@@ -57,6 +58,34 @@ it('refuses to answer when the project has no embeddings yet', function () {
 
     expect(fn () => $pipeline->ask($project, $credential, 'What is the travel policy?', null))
         ->toThrow(RagException::class, 'no processed documents');
+});
+
+it('refuses to answer while the project is re-embedding', function () {
+    $owner = createOwner();
+    bindTenant($owner);
+    $project = Project::factory()->for($owner->currentOrganization)->create([
+        'embedding_model_id' => 'BAAI/bge-small-en-v1.5',
+        'embedding_dimension' => 384,
+        'reembed_status' => ReembedStatus::Running,
+    ]);
+    $credential = ProjectCredential::factory()->for($project)->create();
+
+    expect(fn () => app(RagPipeline::class)->ask($project, $credential, 'Anything?', null))
+        ->toThrow(RagException::class, 're-embedding its documents');
+});
+
+it('reports a failed re-embed distinctly', function () {
+    $owner = createOwner();
+    bindTenant($owner);
+    $project = Project::factory()->for($owner->currentOrganization)->create([
+        'embedding_model_id' => 'BAAI/bge-small-en-v1.5',
+        'embedding_dimension' => 384,
+        'reembed_status' => ReembedStatus::Failed,
+    ]);
+    $credential = ProjectCredential::factory()->for($project)->create();
+
+    expect(fn () => app(RagPipeline::class)->ask($project, $credential, 'Anything?', null))
+        ->toThrow(RagException::class, 'last re-embedding of this project failed');
 });
 
 it('searches, calls the llm with grounded context, and persists both turns', function () {

@@ -7,8 +7,10 @@ from fastapi.responses import StreamingResponse
 from app.chunking import list_strategies
 from app.config import get_settings
 from app.embeddings import get_embedder, list_embedders
-from app.pipeline import ProcessingError, process_document
+from app.pipeline import ProcessingError, embed_document_chunks, process_document
 from app.schemas import (
+    EmbedDocumentRequest,
+    EmbedDocumentResponse,
     EmbedQueryRequest,
     EmbedQueryResponse,
     ExportRequest,
@@ -44,6 +46,16 @@ def strategies() -> dict:
 def process(req: ProcessRequest) -> ProcessResponse:
     try:
         return process_document(req)
+    except ProcessingError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    except CollectionMismatch as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+
+@app.post("/documents/embed", response_model=EmbedDocumentResponse, dependencies=[Internal])
+def embed_document(req: EmbedDocumentRequest) -> EmbedDocumentResponse:
+    try:
+        return embed_document_chunks(req)
     except ProcessingError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     except CollectionMismatch as exc:

@@ -59,6 +59,18 @@ class RagClient
     }
 
     /**
+     * Re-embed a document's stored chunks under the project's current embedder,
+     * without re-downloading or re-chunking the source file.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function embedDocument(array $payload): array
+    {
+        return $this->post('/documents/embed', $payload, timeout: 600)->json();
+    }
+
+    /**
      * Embed the query and return the top matching chunks from a project's collection.
      *
      * @param  array{provider: string, model: string|null}|null  $embedder

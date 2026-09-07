@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ReembedStatus;
 use App\Support\BelongsToOrganization;
 use Database\Factories\ProjectFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -21,7 +22,17 @@ class Project extends Model
         return [
             'chunking_config' => 'array',
             'embedding_dimension' => 'integer',
+            'reembed_status' => ReembedStatus::class,
         ];
+    }
+
+    /**
+     * Whether this project is mid-re-embed — its collection is being rebuilt and
+     * querying is unavailable until the job finishes.
+     */
+    public function isReembedding(): bool
+    {
+        return $this->reembed_status?->isActive() ?? false;
     }
 
     public function documents(): HasMany

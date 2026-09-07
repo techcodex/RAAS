@@ -28,6 +28,8 @@ class ProjectResource extends JsonResource
                 'model' => $this->embedder_model,
                 'bound_model_id' => $this->embedding_model_id,
                 'dimension' => $this->embedding_dimension,
+                'reembed_status' => $this->reembed_status,
+                'reembed_error' => $this->reembed_error,
             ],
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

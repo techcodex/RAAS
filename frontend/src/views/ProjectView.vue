@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import AppShell from '@/components/AppShell.vue'
 import ChunkPreview from '@/components/ChunkPreview.vue'
 import DocumentTable from '@/components/DocumentTable.vue'
 import DocumentUploader from '@/components/DocumentUploader.vue'
+import EmbedderPicker from '@/components/EmbedderPicker.vue'
 import LlmSettings from '@/components/LlmSettings.vue'
 import QueryChat from '@/components/QueryChat.vue'
 import StrategyPicker from '@/components/StrategyPicker.vue'
@@ -28,7 +29,27 @@ const strategyConfig = ref<Record<string, unknown>>({})
 
 const table = useTemplateRef<InstanceType<typeof DocumentTable>>('table')
 const canExport = computed(() => project.value?.embedder.bound_model_id != null)
-const canAsk = computed(() => hasCredential.value && canExport.value)
+const reembedding = computed(() => {
+  const status = project.value?.embedder.reembed_status
+  return status === 'queued' || status === 'running'
+})
+const canAsk = computed(
+  () => hasCredential.value && canExport.value && project.value?.embedder.reembed_status == null,
+)
+
+// While a re-embed runs, poll the project so the picker + Ask tab update when it finishes.
+let reembedPoll: ReturnType<typeof setInterval> | null = null
+watch(reembedding, (active) => {
+  if (active && reembedPoll === null) {
+    reembedPoll = setInterval(() => load(false), 3000)
+  } else if (!active && reembedPoll !== null) {
+    clearInterval(reembedPoll)
+    reembedPoll = null
+  }
+})
+onUnmounted(() => {
+  if (reembedPoll !== null) clearInterval(reembedPoll)
+})
 
 async function load(showSpinner = true) {
   if (showSpinner) loading.value = true
@@ -137,6 +158,11 @@ onMounted(load)
         </section>
 
         <section class="mt-6 space-y-3">
+          <EmbedderPicker
+            :project-id="project.id"
+            :embedder="project.embedder"
+            @changed="load(false)"
+          />
           <StrategyPicker v-model:strategy="strategy" v-model:config="strategyConfig" />
           <div class="flex items-center gap-3">
             <button
@@ -168,6 +194,12 @@ onMounted(load)
         <section class="mt-6">
           <LlmSettings :project-id="project.id" @update:configured="hasCredential = $event" />
         </section>
+        <p
+          v-if="reembedding"
+          class="mt-4 rounded-md bg-amber-50 p-2 text-sm text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+        >
+          This project is re-embedding its documents. Querying will be available once it finishes.
+        </p>
         <section class="mt-4">
           <QueryChat :project-id="project.id" :enabled="canAsk" />
         </section>

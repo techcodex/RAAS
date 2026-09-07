@@ -35,11 +35,15 @@ export type DocumentStatus =
   | 'ready'
   | 'failed'
 
+export type ReembedStatus = 'queued' | 'running' | 'failed'
+
 export interface ProjectEmbedder {
   provider: string | null
   model: string | null
   bound_model_id: string | null
   dimension: number | null
+  reembed_status: ReembedStatus | null
+  reembed_error: string | null
 }
 
 export interface Project {

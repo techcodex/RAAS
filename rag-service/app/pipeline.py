@@ -8,7 +8,13 @@ from app.chunking import AUTO, auto_select, get_chunker
 from app.config import get_settings
 from app.embeddings import get_embedder
 from app.parsing import ExtractionError, extract
-from app.schemas import ChunkOut, ProcessRequest, ProcessResponse
+from app.schemas import (
+    ChunkOut,
+    EmbedDocumentRequest,
+    EmbedDocumentResponse,
+    ProcessRequest,
+    ProcessResponse,
+)
 from app.vectorstore import QdrantStore
 from app.vectorstore.qdrant import UpsertPoint, point_id_for
 
@@ -103,4 +109,53 @@ def process_document(req: ProcessRequest) -> ProcessResponse:
             ChunkOut(index=c.index, text=c.text, token_count=c.token_count, metadata=c.metadata)
             for c in chunks
         ],
+    )
+
+
+def embed_document_chunks(req: EmbedDocumentRequest) -> EmbedDocumentResponse:
+    """Re-embed a document's stored chunks under a (possibly new) model and upsert
+    them into the collection. Used by the backend's project re-embed job, which
+    drops the collection first so a new dimension can take effect."""
+    try:
+        embedder = get_embedder(req.embedder)
+    except ValueError as exc:
+        raise ProcessingError(str(exc)) from exc
+
+    chunks = sorted(req.chunks, key=lambda c: c.index)
+    if not chunks:
+        raise ProcessingError("No chunks to embed.")
+
+    vectors = embedder.embed([c.text for c in chunks])
+
+    store = QdrantStore(req.collection)
+    store.ensure_collection(embedder.dimension, embedder.distance, embedder.model_id)
+    if req.replace:
+        store.delete_document(req.document_id)
+
+    payload_base = {
+        "document_id": req.document_id,
+        "organization_id": req.organization_id,
+        "project_id": req.project_id,
+        "model_id": embedder.model_id,
+    }
+    store.upsert([
+        UpsertPoint(
+            vector=vector,
+            point_id=point_id_for(req.document_id, chunk.index),
+            payload={**payload_base, "chunk_index": chunk.index, "text": chunk.text, **chunk.metadata},
+        )
+        for chunk, vector in zip(chunks, vectors, strict=True)
+    ])
+
+    logger.info(
+        "re-embedded document=%s chunks=%d model=%s",
+        req.document_id, len(chunks), embedder.model_id,
+    )
+
+    return EmbedDocumentResponse(
+        model_id=embedder.model_id,
+        dimension=embedder.dimension,
+        distance=embedder.distance,
+        collection=req.collection,
+        chunk_count=len(chunks),
     )

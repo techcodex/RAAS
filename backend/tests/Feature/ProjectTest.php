@@ -1,6 +1,9 @@
 <?php
 
+use App\Enums\ReembedStatus;
+use App\Jobs\ReembedProject;
 use App\Models\Project;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 
 it('lists only the current organization projects', function () {
@@ -61,6 +64,68 @@ it('updates a project', function () {
         ->assertJsonPath('data.name', 'Renamed');
 
     expect($project->refresh()->name)->toBe('Renamed');
+});
+
+it('queues a re-embed when the embedding model changes on a project with embeddings', function () {
+    Queue::fake();
+    $user = createOwner();
+    $project = Project::factory()->for($user->currentOrganization)->create([
+        'embedder_model' => 'BAAI/bge-small-en-v1.5',
+        'embedding_model_id' => 'BAAI/bge-small-en-v1.5',
+        'embedding_dimension' => 384,
+    ]);
+    Sanctum::actingAs($user);
+
+    $this->patchJson("/api/v1/projects/{$project->id}", ['embedder_model' => 'BAAI/bge-base-en-v1.5'])
+        ->assertOk()
+        ->assertJsonPath('data.embedder.model', 'BAAI/bge-base-en-v1.5')
+        ->assertJsonPath('data.embedder.reembed_status', 'queued');
+
+    Queue::assertPushed(ReembedProject::class, fn (ReembedProject $job) => $job->project->is($project));
+    expect($project->refresh()->reembed_status)->toBe(ReembedStatus::Queued);
+});
+
+it('does not queue a re-embed when the project has no embeddings yet', function () {
+    Queue::fake();
+    $user = createOwner();
+    $project = Project::factory()->for($user->currentOrganization)->create();
+    Sanctum::actingAs($user);
+
+    $this->patchJson("/api/v1/projects/{$project->id}", ['embedder_model' => 'BAAI/bge-base-en-v1.5'])
+        ->assertOk()
+        ->assertJsonPath('data.embedder.reembed_status', null);
+
+    Queue::assertNothingPushed();
+    expect($project->refresh()->embedder_model)->toBe('BAAI/bge-base-en-v1.5');
+});
+
+it('does not queue a re-embed when the model is unchanged', function () {
+    Queue::fake();
+    $user = createOwner();
+    $project = Project::factory()->for($user->currentOrganization)->create([
+        'embedder_model' => 'BAAI/bge-small-en-v1.5',
+        'embedding_model_id' => 'BAAI/bge-small-en-v1.5',
+        'embedding_dimension' => 384,
+    ]);
+    Sanctum::actingAs($user);
+
+    $this->patchJson("/api/v1/projects/{$project->id}", ['embedder_model' => 'BAAI/bge-small-en-v1.5'])
+        ->assertOk();
+
+    Queue::assertNothingPushed();
+});
+
+it('rejects settings changes while a re-embed is running', function () {
+    $user = createOwner();
+    $project = Project::factory()->for($user->currentOrganization)->create([
+        'reembed_status' => ReembedStatus::Running,
+    ]);
+    Sanctum::actingAs($user);
+
+    $this->patchJson("/api/v1/projects/{$project->id}", ['name' => 'Renamed'])
+        ->assertStatus(409);
+
+    expect($project->refresh()->name)->not->toBe('Renamed');
 });
 
 it('deletes a project', function () {

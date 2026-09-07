@@ -19,6 +19,8 @@ class UpdateProjectRequest extends FormRequest
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],
+            // Changing this on a project with embedded documents queues a re-embed.
+            'embedder_model' => ['sometimes', 'required', 'string', 'max:255'],
         ];
     }
 }

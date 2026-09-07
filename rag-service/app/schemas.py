@@ -37,6 +37,32 @@ class ProcessResponse(BaseModel):
     chunks: list[ChunkOut]
 
 
+class ChunkInput(BaseModel):
+    index: int
+    text: str
+    metadata: dict = Field(default_factory=dict)
+
+
+class EmbedDocumentRequest(BaseModel):
+    """Re-embed a document's already-extracted chunks (no download / parse / chunk)."""
+
+    collection: str
+    organization_id: int
+    project_id: int
+    document_id: int
+    embedder: EmbedderConfig | None = None
+    chunks: list[ChunkInput]
+    replace: bool = True
+
+
+class EmbedDocumentResponse(BaseModel):
+    model_id: str
+    dimension: int
+    distance: str
+    collection: str
+    chunk_count: int
+
+
 class EmbedQueryRequest(BaseModel):
     text: str
     embedder: EmbedderConfig | None = None
